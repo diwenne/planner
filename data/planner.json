@@ -64,7 +64,7 @@
     {
       "id": "dyyxww7",
       "type": "todo",
-      "content": "finish vector and complex worksheets",
+      "content": "vector and complex worksheets",
       "checked": false
     },
     {
@@ -76,8 +76,21 @@
   "2026-04-24": [
     {
       "id": "default-2026-04-24",
-      "type": "h3",
-      "content": ""
+      "type": "todo",
+      "content": "finish vector and complex number worksheets",
+      "checked": false
+    },
+    {
+      "id": "ccruzg9",
+      "type": "todo",
+      "content": "textbook questions",
+      "checked": false
+    },
+    {
+      "id": "o7t2v42",
+      "type": "todo",
+      "content": "make a reel bruh",
+      "checked": false
     }
   ],
   "2026-05-05": [
@@ -106,6 +119,28 @@
       "id": "default-2026-05-04",
       "type": "h2",
       "content": "badminton banner game"
+    }
+  ],
+  "2026-04-27": [
+    {
+      "id": "default-2026-04-27",
+      "type": "text",
+      "content": ""
+    }
+  ],
+  "2026-04-25": [
+    {
+      "id": "default-2026-04-25",
+      "type": "todo",
+      "content": "finish textbook questions",
+      "checked": false
+    }
+  ],
+  "2026-04-28": [
+    {
+      "id": "default-2026-04-28",
+      "type": "text",
+      "content": ""
     }
   ]
 }

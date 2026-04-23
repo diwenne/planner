@@ -58,6 +58,7 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DEFAULT_COL_WIDTH = 190;
 const DEFAULT_ROW_HEIGHT = 150;
 const MIN_COL_WIDTH = 120;
+const MIN_ROW_HEIGHT = 60;
 const HEADER_HEIGHT = 36;
 const TITLE_HEIGHT = 44;
 const PAGE_GAP = 80;
@@ -101,14 +102,29 @@ export default function Home() {
   const offsetRef = useRef({ x: 0, y: 0 });
   const animationRef = useRef<number | null>(null);
 
-  // ─── Grid sizing (shared across all months) ──────────────────────────
+  // ─── Grid sizing ──────────────────────────────────────────────────────
 
   const [colWidths, setColWidths] = useState<number[]>(
     Array(7).fill(DEFAULT_COL_WIDTH)
   );
+  // Per-month row min-heights: keyed by "year-month"
+  const [allRowHeights, setAllRowHeights] = useState<
+    Record<string, number[]>
+  >({});
+
+  const getRowMinHeight = useCallback(
+    (year: number, month: number, rowIndex: number): number => {
+      const key = `${year}-${month}`;
+      return allRowHeights[key]?.[rowIndex] ?? DEFAULT_ROW_HEIGHT;
+    },
+    [allRowHeights]
+  );
+
   const [resizing, setResizing] = useState<{
-    type: "col";
+    type: "col" | "row";
     index: number;
+    monthKey?: string;
+    numRows?: number;
     startPos: number;
     startSize: number;
   } | null>(null);
@@ -340,22 +356,38 @@ export default function Home() {
     return () => el.removeEventListener("wheel", handler);
   }, [loaded]);
 
-  // ─── Column resize handlers ──────────────────────────────────────────
+  // ─── Resize handlers (col + row) ─────────────────────────────────────
 
   useEffect(() => {
     if (!resizing) return;
 
     const handleMouseMove = (e: globalThis.MouseEvent) => {
       const currentScale = scaleRef.current;
-      const diff = (e.clientX - resizing.startPos) / currentScale;
-      setColWidths((prev) => {
-        const next = [...prev];
-        next[resizing.index] = Math.max(
-          MIN_COL_WIDTH,
+      if (resizing.type === "col") {
+        const diff = (e.clientX - resizing.startPos) / currentScale;
+        setColWidths((prev) => {
+          const next = [...prev];
+          next[resizing.index] = Math.max(
+            MIN_COL_WIDTH,
+            resizing.startSize + diff
+          );
+          return next;
+        });
+      } else {
+        // Row resize
+        const diff = (e.clientY - resizing.startPos) / currentScale;
+        const newHeight = Math.max(
+          MIN_ROW_HEIGHT,
           resizing.startSize + diff
         );
-        return next;
-      });
+        setAllRowHeights((prev) => {
+          const key = resizing.monthKey!;
+          const existing = prev[key] || Array(resizing.numRows).fill(DEFAULT_ROW_HEIGHT);
+          const next = [...existing];
+          next[resizing.index] = newHeight;
+          return { ...prev, [key]: next };
+        });
+      }
     };
 
     const handleMouseUp = () => setResizing(null);
@@ -381,7 +413,13 @@ export default function Home() {
   return (
     <div
       className="h-screen flex flex-col"
-      style={{ cursor: resizing ? "col-resize" : undefined }}
+      style={{
+        cursor: resizing
+          ? resizing.type === "col"
+            ? "col-resize"
+            : "row-resize"
+          : undefined,
+      }}
     >
       {/* ── Fixed Toolbar ──────────────────────────────────────────── */}
       <header className="border-b border-neutral-200 px-4 py-1.5 flex items-center justify-between shrink-0 bg-white z-30">
@@ -494,7 +532,7 @@ export default function Home() {
 
                 {/* Calendar card */}
                 <div
-                  className="bg-white rounded-xl border border-neutral-200"
+                  className="bg-white rounded-xl border border-neutral-200 overflow-hidden"
                   style={{
                     boxShadow: isFocused
                       ? "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)"
@@ -503,7 +541,7 @@ export default function Home() {
                 >
                   {/* Day headers */}
                   <div
-                    className="flex border-b border-neutral-200 rounded-t-xl overflow-hidden"
+                    className="flex border-b border-neutral-200"
                     style={{ height: HEADER_HEIGHT }}
                   >
                     {DAY_NAMES.map((day, i) => (
@@ -536,15 +574,18 @@ export default function Home() {
                   {/* Week rows */}
                   {weeks.map((week, wi) => {
                     const isLastRow = wi === weeks.length - 1;
+                    const rowMinH = getRowMinHeight(
+                      page.year,
+                      page.month,
+                      wi
+                    );
                     return (
-                      <div key={wi}>
+                      <div key={wi} className="relative">
                         <div
                           className={`flex border-b border-neutral-100 ${
-                            isLastRow
-                              ? "border-b-0 rounded-b-xl overflow-hidden"
-                              : ""
+                            isLastRow ? "border-b-0" : ""
                           }`}
-                          style={{ height: DEFAULT_ROW_HEIGHT }}
+                          style={{ minHeight: rowMinH }}
                         >
                           {week.map((day, di) => {
                             if (day === null) {
@@ -567,7 +608,7 @@ export default function Home() {
                             return (
                               <div
                                 key={di}
-                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col overflow-hidden hover:bg-neutral-50/40 transition-colors"
+                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col hover:bg-neutral-50/40 transition-colors"
                                 style={{ width: colWidths[di] }}
                               >
                                 {/* Date number */}
@@ -584,7 +625,7 @@ export default function Home() {
                                 </div>
 
                                 {/* Inline editor */}
-                                <div className="flex-1 px-2 pb-1 overflow-hidden min-h-0">
+                                <div className="flex-1 px-2 pb-1">
                                   <BlockEditor
                                     blocks={getBlocks(dateStr)}
                                     onChange={(blocks) =>
@@ -595,6 +636,26 @@ export default function Home() {
                               </div>
                             );
                           })}
+                        </div>
+
+                        {/* Row resize handle */}
+                        <div
+                          className="absolute left-0 bottom-0 h-[6px] -mb-[3px] cursor-row-resize z-10 group/resize"
+                          style={{ width: pageWidth }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setResizing({
+                              type: "row",
+                              index: wi,
+                              monthKey: `${page.year}-${page.month}`,
+                              numRows: weeks.length,
+                              startPos: e.clientY,
+                              startSize: rowMinH,
+                            });
+                          }}
+                        >
+                          <div className="h-[2px] w-full bg-transparent group-hover/resize:bg-blue-400 transition-colors mt-[2px] rounded-full" />
                         </div>
                       </div>
                     );
