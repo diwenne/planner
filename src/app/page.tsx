@@ -289,10 +289,15 @@ export default function Home() {
         const weeks = getMonthWeeks(y, m);
         const calH =
           TITLE_HEIGHT + HEADER_HEIGHT + weeks.length * DEFAULT_ROW_HEIGHT;
+        const s = scaleRef.current;
 
+        // transform is translate(ox, oy) scale(s)
+        // screen pos = offset + canvasPos * scale
+        // center: offset + (targetX + pageWidth/2) * s = clientWidth/2
+        //   =>  offset = (clientWidth - pageWidth * s) / 2 - targetX * s
         animateToOffset(
-          (clientWidth - pageWidth) / 2 - targetX,
-          Math.max(40, (clientHeight - calH) / 2)
+          (clientWidth - pageWidth * s) / 2 - targetX * s,
+          Math.max(40, (clientHeight - calH * s) / 2)
         );
       }
     },
