@@ -613,8 +613,36 @@ export default function Home() {
                             return (
                               <div
                                 key={di}
-                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col hover:bg-neutral-50/40 transition-colors"
+                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col hover:bg-neutral-50/40 transition-colors cursor-text"
                                 style={{ width: colWidths[di] }}
+                                onClick={(e) => {
+                                  // If clicking empty space, focus the last editable block
+                                  const target = e.target as HTMLElement;
+                                  if (
+                                    !target.closest("[contenteditable]") &&
+                                    !target.closest('input[type="checkbox"]')
+                                  ) {
+                                    const editables =
+                                      (e.currentTarget as HTMLElement).querySelectorAll(
+                                        "[contenteditable]"
+                                      );
+                                    const last = editables[editables.length - 1] as HTMLElement;
+                                    if (last) {
+                                      last.focus();
+                                      // Place cursor at end
+                                      const sel = window.getSelection();
+                                      const range = document.createRange();
+                                      if (last.childNodes.length > 0) {
+                                        range.setStartAfter(last.lastChild!);
+                                      } else {
+                                        range.setStart(last, 0);
+                                      }
+                                      range.collapse(true);
+                                      sel?.removeAllRanges();
+                                      sel?.addRange(range);
+                                    }
+                                  }
+                                }}
                               >
                                 {/* Date number */}
                                 <div className="px-2 pt-1.5 pb-0.5 shrink-0">
