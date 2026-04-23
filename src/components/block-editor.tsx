@@ -52,22 +52,7 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
       )
     : [];
 
-  // ─── Compute menu position when slash menu opens ──────────────────────
-
-  useEffect(() => {
-    if (slashMenu) {
-      const el = blockRefs.current[slashMenu.blockId];
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        setMenuPos({
-          x: rect.left,
-          y: rect.bottom + 4,
-        });
-      }
-    } else {
-      setMenuPos(null);
-    }
-  }, [slashMenu]);
+  // (Menu position is computed inline in handleInput)
 
   // ─── Focus management ──────────────────────────────────────────────────
 
@@ -149,10 +134,29 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
 
       const slashMatch = text.match(/\/(\S*)$/);
       if (slashMatch) {
+        // Capture caret position NOW, while selection is still valid
+        let pos = { x: 0, y: 0 };
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.height > 0) {
+            pos = { x: rect.left, y: rect.bottom + 4 };
+          } else {
+            // Collapsed caret fallback: use block element
+            const el = blockRefs.current[id];
+            if (el) {
+              const blockRect = el.getBoundingClientRect();
+              pos = { x: blockRect.left, y: blockRect.bottom + 4 };
+            }
+          }
+        }
+        setMenuPos(pos);
         setSlashMenu({ blockId: id, query: "/" + slashMatch[1] });
         setSelectedMenuIndex(0);
       } else {
         setSlashMenu(null);
+        setMenuPos(null);
       }
     },
     [updateBlock]
