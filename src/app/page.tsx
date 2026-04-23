@@ -643,9 +643,26 @@ export default function Home() {
                               return (
                                 <div
                                   key={di}
-                                  className="shrink-0 border-r border-neutral-100 last:border-r-0 bg-neutral-50/40"
+                                  className="relative shrink-0 border-r border-neutral-100 last:border-r-0 bg-neutral-50/40 opacity-0 hover:opacity-100 transition-opacity"
                                   style={{ width: colWidths[di] }}
-                                />
+                                >
+                                  {/* Col resize handle (empty cell) */}
+                                  <div
+                                    className="absolute right-0 top-0 bottom-0 w-[6px] -mr-[3px] cursor-col-resize z-20 group/resize"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setResizing({
+                                        type: "col",
+                                        index: di,
+                                        startPos: e.clientX,
+                                        startSize: colWidths[di],
+                                      });
+                                    }}
+                                  >
+                                    <div className="w-[2px] h-full mx-auto bg-transparent group-hover/resize:bg-blue-400 transition-colors rounded-full" />
+                                  </div>
+                                </div>
                               );
                             }
 
@@ -659,7 +676,7 @@ export default function Home() {
                             return (
                               <div
                                 key={di}
-                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col hover:bg-neutral-50/40 transition-colors cursor-text"
+                                className="relative shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col group/cell cursor-text"
                                 style={{ width: colWidths[di] }}
                                 onClick={(e) => {
                                   // If clicking empty space, focus the last editable block
@@ -690,8 +707,28 @@ export default function Home() {
                                   }
                                 }}
                               >
+                                {/* Cell background hover effect */}
+                                <div className="absolute inset-0 bg-neutral-50/40 opacity-0 group-hover/cell:opacity-100 transition-opacity pointer-events-none" />
+
+                                {/* Col resize handle (active cell) */}
+                                <div
+                                  className="absolute right-0 top-0 bottom-0 w-[6px] -mr-[3px] cursor-col-resize z-20 group/resize opacity-0 group-hover/cell:opacity-100 transition-opacity"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setResizing({
+                                      type: "col",
+                                      index: di,
+                                      startPos: e.clientX,
+                                      startSize: colWidths[di],
+                                    });
+                                  }}
+                                >
+                                  <div className="w-[2px] h-full mx-auto bg-transparent group-hover/resize:bg-blue-400 transition-colors rounded-full" />
+                                </div>
+
                                 {/* Date number */}
-                                <div className="px-2 pt-1.5 pb-0.5 shrink-0">
+                                <div className="relative px-2 pt-1.5 pb-0.5 shrink-0 z-10 pointer-events-none">
                                   <span
                                     className={`text-xs select-none ${
                                       isToday
@@ -704,7 +741,7 @@ export default function Home() {
                                 </div>
 
                                 {/* Inline editor */}
-                                <div className="flex-1 px-2 pb-1">
+                                <div className="relative flex-1 px-2 pb-1 z-10 content-relative">
                                   <BlockEditor
                                     blocks={getBlocks(dateStr)}
                                     onChange={(blocks) =>
