@@ -129,6 +129,11 @@ export default function Home() {
     startSize: number;
   } | null>(null);
 
+  // ─── Drag to pan state ───────────────────────────────────────────────
+
+  const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
+
   // ─── Sync refs ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -405,6 +410,30 @@ export default function Home() {
     };
   }, [resizing]);
 
+  // ─── Drag to pan handler ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!isDraggingCanvas) return;
+
+    const handlePointerMove = (e: globalThis.PointerEvent) => {
+      const dx = e.clientX - dragStartRef.current.mouseX;
+      const dy = e.clientY - dragStartRef.current.mouseY;
+      setOffset({
+        x: dragStartRef.current.offsetX + dx,
+        y: dragStartRef.current.offsetY + dy,
+      });
+    };
+
+    const handlePointerUp = () => setIsDraggingCanvas(false);
+
+    document.addEventListener("pointermove", handlePointerMove);
+    document.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isDraggingCanvas]);
+
   // ─── Render ──────────────────────────────────────────────────────────
 
   if (!loaded) {
@@ -484,14 +513,31 @@ export default function Home() {
       {/* ── Infinite Canvas ─────────────────────────────────────────── */}
       <div
         ref={canvasRef}
-        className="flex-1 overflow-hidden relative"
+        className={`flex-1 overflow-hidden relative ${
+          isDraggingCanvas ? "cursor-grabbing" : "cursor-grab"
+        }`}
         style={{
           backgroundColor: "#f8f8f8",
           backgroundImage:
             "radial-gradient(circle, #e0e0e0 0.8px, transparent 0.8px)",
           backgroundSize: `${24 * scale}px ${24 * scale}px`,
           backgroundPosition: `${offset.x}px ${offset.y}px`,
-          userSelect: resizing ? "none" : undefined,
+          userSelect: resizing || isDraggingCanvas ? "none" : undefined,
+        }}
+        onPointerDown={(e) => {
+          // If they click on the calendar cards, ignore (let them select text/blocks)
+          const target = e.target as HTMLElement;
+          if (target === canvasRef.current) {
+            setIsDraggingCanvas(true);
+            dragStartRef.current = {
+              mouseX: e.clientX,
+              mouseY: e.clientY,
+              offsetX: offset.x,
+              offsetY: offset.y,
+            };
+            // Prevent text selection while dragging
+            e.preventDefault();
+          }
         }}
       >
         {/* Transformed content layer */}
