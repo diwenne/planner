@@ -1,65 +1,610 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Block, PlannerData } from "@/lib/types";
+import BlockEditor from "@/components/block-editor";
+import { Button } from "@/components/ui/button";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfWeek(year: number, month: number) {
+  return new Date(year, month, 1).getDay();
+}
+
+function formatDate(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+function getMonthWeeks(year: number, month: number): (number | null)[][] {
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfWeek(year, month);
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7)
+    weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+function monthToGlobalIndex(year: number, month: number) {
+  return year * 12 + month;
+}
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const DEFAULT_COL_WIDTH = 190;
+const DEFAULT_ROW_HEIGHT = 150;
+const MIN_COL_WIDTH = 120;
+const HEADER_HEIGHT = 36;
+const TITLE_HEIGHT = 44;
+const PAGE_GAP = 80;
+const RENDER_RANGE = 2; // Render focused ± 2 months = 5 pages
+
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const today = new Date();
+  const todayStr = formatDate(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const anchorGlobal = useRef(
+    monthToGlobalIndex(today.getFullYear(), today.getMonth())
+  ).current;
+
+  // ─── Data ─────────────────────────────────────────────────────────────
+
+  const [data, setData] = useState<PlannerData>({});
+  const [loaded, setLoaded] = useState(false);
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
+  const defaultBlocksRef = useRef<Record<string, Block[]>>({});
+
+  // ─── Focused month ───────────────────────────────────────────────────
+
+  const [focusedYear, setFocusedYear] = useState(today.getFullYear());
+  const [focusedMonth, setFocusedMonth] = useState(today.getMonth());
+  // Refs keep latest values for rapid clicks and callbacks
+  const focusedYearRef = useRef(focusedYear);
+  const focusedMonthRef = useRef(focusedMonth);
+
+  // ─── Canvas state ────────────────────────────────────────────────────
+
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const scaleRef = useRef(1);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const animationRef = useRef<number | null>(null);
+
+  // ─── Grid sizing (shared across all months) ──────────────────────────
+
+  const [colWidths, setColWidths] = useState<number[]>(
+    Array(7).fill(DEFAULT_COL_WIDTH)
+  );
+  const [resizing, setResizing] = useState<{
+    type: "col";
+    index: number;
+    startPos: number;
+    startSize: number;
+  } | null>(null);
+
+  // ─── Sync refs ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+  useEffect(() => {
+    focusedYearRef.current = focusedYear;
+  }, [focusedYear]);
+  useEffect(() => {
+    focusedMonthRef.current = focusedMonth;
+  }, [focusedMonth]);
+
+  // ─── Derived layout values ───────────────────────────────────────────
+
+  const pageWidth = colWidths.reduce((a, b) => a + b, 0);
+  const PAGE_STRIDE = pageWidth + PAGE_GAP;
+
+  // Stable global X position for any month
+  const getMonthX = useCallback(
+    (year: number, month: number) => {
+      const idx = monthToGlobalIndex(year, month);
+      return (idx - anchorGlobal) * PAGE_STRIDE;
+    },
+    [anchorGlobal, PAGE_STRIDE]
+  );
+
+  // Months to render (sliding window around focused month)
+  const monthPages = useMemo(() => {
+    const pages = [];
+    for (let i = -RENDER_RANGE; i <= RENDER_RANGE; i++) {
+      const d = new Date(focusedYear, focusedMonth + i, 1);
+      pages.push({
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        x: getMonthX(d.getFullYear(), d.getMonth()),
+      });
+    }
+    return pages;
+  }, [focusedYear, focusedMonth, getMonthX]);
+
+  // ─── Data fetching ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    fetch("/api/planner")
+      .then((r) => r.json())
+      .then((d) => {
+        setData(d);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  // ─── Center on mount ────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (canvasRef.current && !initializedRef.current && loaded) {
+      initializedRef.current = true;
+      const { clientWidth, clientHeight } = canvasRef.current;
+      const weeks = getMonthWeeks(focusedYear, focusedMonth);
+      const calH =
+        TITLE_HEIGHT + HEADER_HEIGHT + weeks.length * DEFAULT_ROW_HEIGHT;
+      setOffset({
+        x: Math.max(60, (clientWidth - pageWidth) / 2),
+        y: Math.max(40, (clientHeight - calH) / 2),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  // ─── Auto-save ──────────────────────────────────────────────────────
+
+  const saveDate = useCallback((date: string, blocks: Block[]) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(() => {
+      fetch("/api/planner", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, blocks }),
+      });
+    }, 500);
+  }, []);
+
+  const handleBlocksChange = useCallback(
+    (date: string, blocks: Block[]) => {
+      delete defaultBlocksRef.current[date];
+      setData((prev) => ({ ...prev, [date]: blocks }));
+      saveDate(date, blocks);
+    },
+    [saveDate]
+  );
+
+  const getBlocks = useCallback(
+    (date: string): Block[] => {
+      if (data[date]) return data[date];
+      if (!defaultBlocksRef.current[date]) {
+        defaultBlocksRef.current[date] = [
+          { id: `default-${date}`, type: "text", content: "" },
+        ];
+      }
+      return defaultBlocksRef.current[date];
+    },
+    [data]
+  );
+
+  // ─── Smooth animation helper ────────────────────────────────────────
+
+  const animateToOffset = useCallback(
+    (targetX: number, targetY: number) => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+
+      const startX = offsetRef.current.x;
+      const startY = offsetRef.current.y;
+      const startTime = performance.now();
+      const duration = 350;
+
+      const step = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+
+        setOffset({
+          x: startX + (targetX - startX) * ease,
+          y: startY + (targetY - startY) * ease,
+        });
+
+        if (t < 1) {
+          animationRef.current = requestAnimationFrame(step);
+        } else {
+          animationRef.current = null;
+        }
+      };
+
+      animationRef.current = requestAnimationFrame(step);
+    },
+    []
+  );
+
+  // ─── Navigation ──────────────────────────────────────────────────────
+
+  const navigateToMonth = useCallback(
+    (year: number, month: number) => {
+      const d = new Date(year, month, 1);
+      const y = d.getFullYear();
+      const m = d.getMonth();
+
+      // Update refs synchronously (for rapid clicks)
+      focusedYearRef.current = y;
+      focusedMonthRef.current = m;
+      setFocusedYear(y);
+      setFocusedMonth(m);
+
+      if (canvasRef.current) {
+        const { clientWidth, clientHeight } = canvasRef.current;
+        const targetX = getMonthX(y, m);
+        const weeks = getMonthWeeks(y, m);
+        const calH =
+          TITLE_HEIGHT + HEADER_HEIGHT + weeks.length * DEFAULT_ROW_HEIGHT;
+
+        animateToOffset(
+          (clientWidth - pageWidth) / 2 - targetX,
+          Math.max(40, (clientHeight - calH) / 2)
+        );
+      }
+    },
+    [getMonthX, pageWidth, animateToOffset]
+  );
+
+  const prevMonth = () =>
+    navigateToMonth(focusedYearRef.current, focusedMonthRef.current - 1);
+  const nextMonth = () =>
+    navigateToMonth(focusedYearRef.current, focusedMonthRef.current + 1);
+  const goToToday = () =>
+    navigateToMonth(today.getFullYear(), today.getMonth());
+  const centerCalendar = () =>
+    navigateToMonth(focusedYearRef.current, focusedMonthRef.current);
+
+  // ─── Canvas wheel handler (pan + pinch-zoom) ─────────────────────────
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+
+      // Cancel any ongoing navigation animation
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch-to-zoom / Ctrl+scroll → zoom toward cursor
+        const rect = el.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+
+        const currentScale = scaleRef.current;
+        const currentOffset = offsetRef.current;
+        const zoomFactor = 1 - e.deltaY * 0.005;
+        const newScale = Math.min(
+          Math.max(currentScale * zoomFactor, 0.15),
+          4
+        );
+        const ratio = newScale / currentScale;
+
+        setOffset({
+          x: cx - (cx - currentOffset.x) * ratio,
+          y: cy - (cy - currentOffset.y) * ratio,
+        });
+        setScale(newScale);
+      } else {
+        // Two-finger scroll → pan
+        setOffset((prev) => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY,
+        }));
+      }
+    };
+
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [loaded]);
+
+  // ─── Column resize handlers ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e: globalThis.MouseEvent) => {
+      const currentScale = scaleRef.current;
+      const diff = (e.clientX - resizing.startPos) / currentScale;
+      setColWidths((prev) => {
+        const next = [...prev];
+        next[resizing.index] = Math.max(
+          MIN_COL_WIDTH,
+          resizing.startSize + diff
+        );
+        return next;
+      });
+    };
+
+    const handleMouseUp = () => setResizing(null);
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [resizing]);
+
+  // ─── Render ──────────────────────────────────────────────────────────
+
+  if (!loaded) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-neutral-50">
+        <p className="text-neutral-400 text-sm">Loading…</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div
+      className="h-screen flex flex-col"
+      style={{ cursor: resizing ? "col-resize" : undefined }}
+    >
+      {/* ── Fixed Toolbar ──────────────────────────────────────────── */}
+      <header className="border-b border-neutral-200 px-4 py-1.5 flex items-center justify-between shrink-0 bg-white z-30">
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-sm font-semibold tracking-tight">Planner</h1>
+          <div className="w-px h-4 bg-neutral-200" />
+          <div className="flex items-center gap-0.5">
+            <Button variant="ghost" size="icon-xs" onClick={prevMonth}>
+              ←
+            </Button>
+            <span className="text-[13px] font-medium min-w-[120px] text-center select-none">
+              {MONTH_NAMES[focusedMonth]} {focusedYear}
+            </span>
+            <Button variant="ghost" size="icon-xs" onClick={nextMonth}>
+              →
+            </Button>
+          </div>
+          <Button variant="outline" size="xs" onClick={goToToday}>
+            Today
+          </Button>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setScale((s) => Math.max(0.15, s * 0.85))}
+            >
+              −
+            </Button>
+            <span className="text-[11px] text-neutral-500 min-w-[36px] text-center tabular-nums select-none">
+              {Math.round(scale * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setScale((s) => Math.min(4, s * 1.15))}
+            >
+              +
+            </Button>
+          </div>
+          <Button variant="outline" size="xs" onClick={centerCalendar}>
+            Center
+          </Button>
+          <div className="w-px h-4 bg-neutral-200" />
+          <span className="text-[11px] text-neutral-400 select-none">
+            Pinch to zoom · Scroll to pan ·{" "}
+            <kbd className="px-1 py-0.5 bg-neutral-100 rounded text-[10px] font-mono">
+              /
+            </kbd>{" "}
+            for commands
+          </span>
         </div>
-      </main>
+      </header>
+
+      {/* ── Infinite Canvas ─────────────────────────────────────────── */}
+      <div
+        ref={canvasRef}
+        className="flex-1 overflow-hidden relative"
+        style={{
+          backgroundColor: "#f8f8f8",
+          backgroundImage:
+            "radial-gradient(circle, #e0e0e0 0.8px, transparent 0.8px)",
+          backgroundSize: `${24 * scale}px ${24 * scale}px`,
+          backgroundPosition: `${offset.x}px ${offset.y}px`,
+          userSelect: resizing ? "none" : undefined,
+        }}
+      >
+        {/* Transformed content layer */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: "0 0",
+            willChange: "transform",
+          }}
+        >
+          {/* ── Month pages ────────────────────────────────────────── */}
+          {monthPages.map((page) => {
+            const weeks = getMonthWeeks(page.year, page.month);
+            const isFocused =
+              page.year === focusedYear && page.month === focusedMonth;
+
+            return (
+              <div
+                key={`${page.year}-${page.month}`}
+                style={{
+                  position: "absolute",
+                  left: page.x,
+                  top: 0,
+                  width: pageWidth,
+                }}
+              >
+                {/* Month title */}
+                <div
+                  className="flex items-center px-1 select-none"
+                  style={{ height: TITLE_HEIGHT }}
+                >
+                  <span
+                    className={`text-sm font-semibold ${
+                      isFocused ? "text-neutral-900" : "text-neutral-400"
+                    }`}
+                  >
+                    {MONTH_NAMES[page.month]} {page.year}
+                  </span>
+                </div>
+
+                {/* Calendar card */}
+                <div
+                  className="bg-white rounded-xl border border-neutral-200"
+                  style={{
+                    boxShadow: isFocused
+                      ? "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)"
+                      : "0 1px 3px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  {/* Day headers */}
+                  <div
+                    className="flex border-b border-neutral-200 rounded-t-xl overflow-hidden"
+                    style={{ height: HEADER_HEIGHT }}
+                  >
+                    {DAY_NAMES.map((day, i) => (
+                      <div
+                        key={day}
+                        className="relative shrink-0 flex items-center px-3 text-[11px] font-medium text-neutral-400 uppercase tracking-widest select-none"
+                        style={{ width: colWidths[i] }}
+                      >
+                        {day}
+                        {/* Col resize handle */}
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-[6px] -mr-[3px] cursor-col-resize z-20 group/resize"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setResizing({
+                              type: "col",
+                              index: i,
+                              startPos: e.clientX,
+                              startSize: colWidths[i],
+                            });
+                          }}
+                        >
+                          <div className="w-[2px] h-full mx-auto bg-transparent group-hover/resize:bg-blue-400 transition-colors rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Week rows */}
+                  {weeks.map((week, wi) => {
+                    const isLastRow = wi === weeks.length - 1;
+                    return (
+                      <div key={wi}>
+                        <div
+                          className={`flex border-b border-neutral-100 ${
+                            isLastRow
+                              ? "border-b-0 rounded-b-xl overflow-hidden"
+                              : ""
+                          }`}
+                          style={{ height: DEFAULT_ROW_HEIGHT }}
+                        >
+                          {week.map((day, di) => {
+                            if (day === null) {
+                              return (
+                                <div
+                                  key={di}
+                                  className="shrink-0 border-r border-neutral-100 last:border-r-0 bg-neutral-50/40"
+                                  style={{ width: colWidths[di] }}
+                                />
+                              );
+                            }
+
+                            const dateStr = formatDate(
+                              page.year,
+                              page.month,
+                              day
+                            );
+                            const isToday = dateStr === todayStr;
+
+                            return (
+                              <div
+                                key={di}
+                                className="shrink-0 border-r border-neutral-100 last:border-r-0 flex flex-col overflow-hidden hover:bg-neutral-50/40 transition-colors"
+                                style={{ width: colWidths[di] }}
+                              >
+                                {/* Date number */}
+                                <div className="px-2 pt-1.5 pb-0.5 shrink-0">
+                                  <span
+                                    className={`text-xs select-none ${
+                                      isToday
+                                        ? "text-blue-600 font-bold"
+                                        : "text-neutral-500 font-medium"
+                                    }`}
+                                  >
+                                    {day}
+                                  </span>
+                                </div>
+
+                                {/* Inline editor */}
+                                <div className="flex-1 px-2 pb-1 overflow-hidden min-h-0">
+                                  <BlockEditor
+                                    blocks={getBlocks(dateStr)}
+                                    onChange={(blocks) =>
+                                      handleBlocksChange(dateStr, blocks)
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
