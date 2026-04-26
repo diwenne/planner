@@ -134,6 +134,21 @@ export default function Home() {
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, offsetX: 0, offsetY: 0 });
 
+  // ─── Mobile detection ────────────────────────────────────────────
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [showMobileBanner, setShowMobileBanner] = useState(false);
+  const touchRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number; lastDist: number; lastScale: number }>({ startX: 0, startY: 0, startOffsetX: 0, startOffsetY: 0, lastDist: 0, lastScale: 1 });
+
+  useEffect(() => {
+    const mobile = window.innerWidth < 768;
+    setIsMobile(mobile);
+    setShowMobileBanner(mobile);
+    if (mobile) {
+      setScale(0.45);
+    }
+  }, []);
+
   // ─── Sync refs ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -467,6 +482,59 @@ export default function Home() {
     return () => el.removeEventListener("wheel", handler);
   }, [loaded]);
 
+  // ─── Touch handlers (mobile pan + pinch-zoom) ───────────────────────
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+
+    const getTouchDist = (t: TouchList) => {
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.target !== el) return;
+      if (e.touches.length === 1) {
+        touchRef.current.startX = e.touches[0].clientX;
+        touchRef.current.startY = e.touches[0].clientY;
+        touchRef.current.startOffsetX = offsetRef.current.x;
+        touchRef.current.startOffsetY = offsetRef.current.y;
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        touchRef.current.lastDist = getTouchDist(e.touches);
+        touchRef.current.lastScale = scaleRef.current;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.target !== el) return;
+      if (e.touches.length === 1) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - touchRef.current.startX;
+        const dy = e.touches[0].clientY - touchRef.current.startY;
+        setOffset({
+          x: touchRef.current.startOffsetX + dx,
+          y: touchRef.current.startOffsetY + dy,
+        });
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getTouchDist(e.touches);
+        const ratio = dist / touchRef.current.lastDist;
+        const newScale = Math.min(4, Math.max(0.15, touchRef.current.lastScale * ratio));
+        setScale(newScale);
+      }
+    };
+
+    el.addEventListener("touchstart", handleTouchStart, { passive: false });
+    el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [loaded]);
+
   // ─── Keyboard zoom handler (Cmd+ / Cmd-) ────────────────────────────
 
   useEffect(() => {
@@ -581,7 +649,17 @@ export default function Home() {
           : undefined,
       }}
     >
-      {/* ── Fixed Toolbar ──────────────────────────────────────────── */}
+      {/* ── Mobile Warning Banner ──────────────────────────────── */}
+      {showMobileBanner && (
+        <div className="bg-neutral-900 text-white px-4 py-2 flex items-center justify-between text-xs shrink-0">
+          <span>This app works best on a larger screen.</span>
+          <button onClick={() => setShowMobileBanner(false)} className="ml-3 text-neutral-400 hover:text-white shrink-0">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* ── Fixed Toolbar ────────────────────────────────────────── */}
       <header className="border-b border-neutral-200 px-2 sm:px-4 py-1.5 flex items-center justify-between shrink-0 bg-white z-30">
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <h1 className="text-sm font-semibold tracking-tight">Planner</h1>
@@ -656,6 +734,7 @@ export default function Home() {
           backgroundSize: `${24 * scale}px ${24 * scale}px`,
           backgroundPosition: `${offset.x}px ${offset.y}px`,
           userSelect: resizing || isDraggingCanvas ? "none" : undefined,
+          touchAction: "none",
         }}
         onPointerDown={(e) => {
           // If they click on the calendar cards, ignore (let them select text/blocks)

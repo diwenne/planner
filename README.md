@@ -40,6 +40,8 @@ npm run dev
 
 Go to [localhost:3000](http://localhost:3000).
 
+When running locally, your data is saved to `data/planner.json` in the project folder. It won't get lost even if you clear your browser.
+
 ---
 
 ## Usage
