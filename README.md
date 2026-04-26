@@ -2,51 +2,53 @@
 
 A minimal calendar planner that runs in your browser. No account needed. Your data saves automatically.
 
-**Live version:** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
-
----
-
-## Quick Start
-
-If you just want to use it, open the link above. Everything saves to your browser automatically.
-
-To back up your data or move it to another device, use the **Export** and **Import** buttons in the top bar.
+**Live version (no setup):** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
 
 ---
 
 ## Running Locally
 
-Running locally saves your data to a file on your computer so it never gets lost.
+### 1. Install Node.js
 
-### Prerequisites
+Download and install from [nodejs.org](https://nodejs.org) (click the LTS button).
 
-Install Node.js from [nodejs.org](https://nodejs.org) (download the LTS version).
+### 2. Open a terminal
 
-### Setup
+**Mac:** Open **Terminal** (Cmd + Space, type "Terminal", press Enter).
 
-**Mac:** Open **Terminal** (search for it with Cmd + Space).
+**Windows:** Open **Command Prompt** (press the Windows key, type "cmd", press Enter).
 
-**Windows:** Open **Command Prompt** (search for it in the Start menu).
-
-Then run:
+### 3. Paste these commands one at a time
 
 ```
-cd path/to/planner
+git clone https://github.com/diwenne/planner.git
+```
+
+```
+cd planner
+```
+
+```
 npm install
+```
+
+```
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000) in your browser.
+### 4. Open in your browser
+
+Go to [localhost:3000](http://localhost:3000).
 
 ---
 
 ## Usage
 
-### Editing
+Click any day and start typing. Changes save automatically.
 
-Click any day cell and start typing. Changes save automatically.
+### Shortcuts
 
-### Shortcuts (type at the start of an empty line, then press Space)
+Type at the start of an empty line, then press Space:
 
 | Input | Result |
 |:------|:-------|
@@ -57,7 +59,7 @@ Click any day cell and start typing. Changes save automatically.
 | `>` | Quote |
 | `/` | Command menu |
 
-### Keyboard Shortcuts
+### Keyboard
 
 | Shortcut | Action |
 |:---------|:-------|
@@ -68,22 +70,13 @@ Click any day cell and start typing. Changes save automatically.
 | Cmd/Ctrl + Minus | Zoom out |
 | Cmd/Ctrl + 0 | Reset zoom |
 
-### Navigation
-
-- Scroll or drag to pan
-- Pinch to zoom
-- Arrow buttons to switch months
-
 ### Pasting from Notion
 
-Copy your Notion tasks and paste them directly. Lines starting with `- [ ]` become checkboxes automatically.
+Copy tasks from Notion and paste them directly. Lines starting with `- [ ]` become checkboxes.
 
 ### Export / Import
 
-- **Export > Copy to Clipboard:** Copy your data as text. Paste it into the Import box on another device.
-- **Export > Download as File:** Save a `.json` backup file.
-- **Import > Upload File:** Restore from a `.json` file.
-- **Import > Paste:** Paste exported text to restore.
+Use the Export and Import buttons in the top bar to back up or restore your data. You can either copy/paste the data as text or download/upload a file.
 
 If you clear your browser data, your notes will be erased. Export regularly.
 
