@@ -928,7 +928,7 @@ export default function Home() {
                 className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
               >
                 <div className="text-sm font-medium text-neutral-800">
-                  {copySuccess ? "✓ Copied!" : "📋 Copy to Clipboard"}
+                  {copySuccess ? "Copied!" : "Copy to Clipboard"}
                 </div>
                 <div className="text-[11px] text-neutral-400 mt-0.5">Paste it into another browser to restore</div>
               </button>
@@ -936,7 +936,7 @@ export default function Home() {
                 onClick={exportAsFile}
                 className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
               >
-                <div className="text-sm font-medium text-neutral-800">📁 Download as File</div>
+                <div className="text-sm font-medium text-neutral-800">Download as File</div>
                 <div className="text-[11px] text-neutral-400 mt-0.5">Save a .json backup to your computer</div>
               </button>
             </div>
@@ -958,7 +958,7 @@ export default function Home() {
                 onClick={importFromFile}
                 className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
               >
-                <div className="text-sm font-medium text-neutral-800">📁 Upload File</div>
+                <div className="text-sm font-medium text-neutral-800">Upload File</div>
                 <div className="text-[11px] text-neutral-400 mt-0.5">Select a .json backup file</div>
               </button>
               <div className="relative">
