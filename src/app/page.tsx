@@ -488,52 +488,89 @@ export default function Home() {
     const el = canvasRef.current;
     if (!el) return;
 
+    let isTouchPanning = false;
+    let isTouchZooming = false;
+
     const getTouchDist = (t: TouchList) => {
       const dx = t[0].clientX - t[1].clientX;
       const dy = t[0].clientY - t[1].clientY;
       return Math.sqrt(dx * dx + dy * dy);
     };
 
+    const getTouchCenter = (t: TouchList) => ({
+      x: (t[0].clientX + t[1].clientX) / 2,
+      y: (t[0].clientY + t[1].clientY) / 2,
+    });
+
     const handleTouchStart = (e: TouchEvent) => {
-      if (e.target !== el) return;
       if (e.touches.length === 1) {
+        isTouchPanning = false;
         touchRef.current.startX = e.touches[0].clientX;
         touchRef.current.startY = e.touches[0].clientY;
         touchRef.current.startOffsetX = offsetRef.current.x;
         touchRef.current.startOffsetY = offsetRef.current.y;
       } else if (e.touches.length === 2) {
         e.preventDefault();
+        isTouchZooming = true;
+        isTouchPanning = false;
         touchRef.current.lastDist = getTouchDist(e.touches);
         touchRef.current.lastScale = scaleRef.current;
+        touchRef.current.startOffsetX = offsetRef.current.x;
+        touchRef.current.startOffsetY = offsetRef.current.y;
       }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (e.target !== el) return;
-      if (e.touches.length === 1) {
-        e.preventDefault();
+      if (e.touches.length === 1 && !isTouchZooming) {
         const dx = e.touches[0].clientX - touchRef.current.startX;
         const dy = e.touches[0].clientY - touchRef.current.startY;
-        setOffset({
-          x: touchRef.current.startOffsetX + dx,
-          y: touchRef.current.startOffsetY + dy,
-        });
+        // Only start panning after moving 8px (so taps still work)
+        if (!isTouchPanning && Math.abs(dx) + Math.abs(dy) > 8) {
+          isTouchPanning = true;
+        }
+        if (isTouchPanning) {
+          e.preventDefault();
+          setOffset({
+            x: touchRef.current.startOffsetX + dx,
+            y: touchRef.current.startOffsetY + dy,
+          });
+        }
       } else if (e.touches.length === 2) {
         e.preventDefault();
         const dist = getTouchDist(e.touches);
         const ratio = dist / touchRef.current.lastDist;
         const newScale = Math.min(4, Math.max(0.15, touchRef.current.lastScale * ratio));
+
+        // Zoom toward the center of the two fingers
+        const rect = el.getBoundingClientRect();
+        const center = getTouchCenter(e.touches);
+        const cx = center.x - rect.left;
+        const cy = center.y - rect.top;
+        const scaleRatio = newScale / touchRef.current.lastScale;
+
         setScale(newScale);
+        setOffset({
+          x: cx - (cx - touchRef.current.startOffsetX) * scaleRatio,
+          y: cy - (cy - touchRef.current.startOffsetY) * scaleRatio,
+        });
       }
+    };
+
+    const handleTouchEnd = () => {
+      isTouchPanning = false;
+      isTouchZooming = false;
     };
 
     el.addEventListener("touchstart", handleTouchStart, { passive: false });
     el.addEventListener("touchmove", handleTouchMove, { passive: false });
+    el.addEventListener("touchend", handleTouchEnd);
     return () => {
       el.removeEventListener("touchstart", handleTouchStart);
       el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("touchend", handleTouchEnd);
     };
   }, [loaded]);
+
 
   // ─── Keyboard zoom handler (Cmd+ / Cmd-) ────────────────────────────
 
