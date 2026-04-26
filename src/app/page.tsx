@@ -818,16 +818,33 @@ export default function Home() {
               >
                 {/* Month title */}
                 <div
-                  className="flex items-center px-1 select-none"
+                  className="flex items-center justify-between px-1 select-none"
                   style={{ height: TITLE_HEIGHT }}
                 >
                   <span
-                    className={`text-sm font-semibold ${
-                      isFocused ? "text-neutral-900" : "text-neutral-400"
+                    className={`text-sm font-semibold cursor-pointer hover:underline ${
+                      isFocused ? "text-neutral-900" : "text-neutral-400 hover:text-neutral-600"
                     }`}
+                    onClick={() => navigateToMonth(page.year, page.month)}
                   >
                     {MONTH_NAMES[page.month]} {page.year}
                   </span>
+                  {isFocused && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
+                        onClick={() => navigateToMonth(page.year, page.month - 1)}
+                      >
+                        ‹ Prev
+                      </button>
+                      <button
+                        className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
+                        onClick={() => navigateToMonth(page.year, page.month + 1)}
+                      >
+                        Next ›
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Calendar card */}
