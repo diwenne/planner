@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📅 Planner
 
-## Getting Started
+A clean, minimal planner that works right in your browser. No account needed, no sign-up, no cloud — your data stays on your computer.
 
-First, run the development server:
+## 🚀 Try It Now (No Setup Required)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**Just open this link:** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
+
+- Your data saves automatically to your browser
+- It stays even if you close the tab or restart your computer
+- Use the **Export** button to back up your notes as a file
+- Use the **Import** button to restore from a backup
+
+> **⚠️ Heads up:** If you clear your browser data/cookies, your notes will be erased. Use the Export button regularly to keep a backup!
+
+---
+
+## 🖥️ Run It Locally (Optional)
+
+If you want to run it on your own computer for faster performance or to keep a local copy of your data, follow these steps:
+
+### Step 1: Install Node.js
+
+You need Node.js installed. If you don't have it:
+
+1. Go to [nodejs.org](https://nodejs.org)
+2. Download the **LTS** version (the big green button)
+3. Open the installer and follow the steps
+
+### Step 2: Download the Planner
+
+1. Go to [github.com/diwenne/planner](https://github.com/diwenne/planner)
+2. Click the green **Code** button → **Download ZIP**
+3. Unzip the folder somewhere you can find it (like your Desktop)
+
+### Step 3: Open a Terminal
+
+**On Mac:**
+1. Open the app called **Terminal** (search for it in Spotlight with `Cmd + Space`)
+2. Type `cd ` (with a space after it), then drag the unzipped planner folder into the Terminal window and press Enter
+
+**On Windows:**
+1. Open the app called **Command Prompt** (search for it in the Start menu)
+2. Type `cd ` (with a space after it), then paste the path to your unzipped planner folder and press Enter
+
+### Step 4: Install & Run
+
+Type these two commands, one at a time:
+
+```
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+You'll see a message like:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+▲ Next.js 16.x.x
+- Local: http://localhost:3000
+```
 
-## Learn More
+Open [localhost:3000](http://localhost:3000) in your browser — that's your planner!
 
-To learn more about Next.js, take a look at the following resources:
+> **💡 Tip:** When you run locally, your data saves to a file on your computer (`data/planner.json`), so you'll never lose it.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ✏️ How to Use
 
-## Deploy on Vercel
+### Typing
+Just click on any day and start typing. Your changes save automatically.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Shortcuts
+Type these at the start of an empty line, then press **Space**:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| What you type | What it becomes |
+|:---|:---|
+| `- []` | ☐ To-do checkbox |
+| `- [x]` | ☑ Checked to-do |
+| `1.` | Numbered list |
+| `#` | Big heading |
+| `>` | Quote block |
+| `/` | Opens command menu |
+
+### Keyboard Shortcuts
+
+| Shortcut | What it does |
+|:---|:---|
+| `Cmd + Z` | Undo |
+| `Cmd + Shift + Z` | Redo |
+| `Cmd + A` | Select all in a cell |
+| `Cmd + +` | Zoom in |
+| `Cmd + -` | Zoom out |
+| `Cmd + 0` | Reset zoom |
+
+### Navigation
+- **Scroll** or **drag** to pan around the calendar
+- **Pinch** or use `Cmd +/-` to zoom
+- Click **Today** to jump to the current date
+- Use **← →** arrows to switch months
+
+### Pasting from Notion
+Copy your Notion todos and paste them directly — the planner will automatically convert `- [ ]` lines into checkboxes!
+
+### Backing Up Your Data
+- Click **Export** in the top bar to download your notes as a `.json` file
+- Click **Import** to restore from a backup file
+
+---
+
+## 📄 License
+
+MIT
