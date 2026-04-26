@@ -956,10 +956,24 @@ export default function Home() {
                   }}
                 >
 
-                  {/* Day headers */}
+                  {/* Day headers (also a drag handle) */}
                   <div
-                    className="flex border-b border-neutral-200"
+                    className={`flex border-b border-neutral-200 ${
+                      draggingMonth === monthKey ? "cursor-grabbing" : "cursor-grab"
+                    }`}
                     style={{ height: HEADER_HEIGHT }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedMonth(monthKey);
+                      setDraggingMonth(monthKey);
+                      dragMonthStart.current = {
+                        mouseX: e.clientX,
+                        mouseY: e.clientY,
+                        cardX: page.x,
+                        cardY: page.y,
+                      };
+                    }}
                   >
                     {DAY_NAMES.map((day, i) => (
                       <div
