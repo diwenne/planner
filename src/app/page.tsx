@@ -149,6 +149,31 @@ export default function Home() {
     }
   }, []);
 
+  // ─── Month card positions & selection ─────────────────────────────
+
+  const [monthPositions, setMonthPositions] = useState<Record<string, { x: number; y: number }>>({}); 
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [draggingMonth, setDraggingMonth] = useState<string | null>(null);
+  const dragMonthStart = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0 });
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+
+  // Load month positions from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("planner-month-positions");
+    if (saved) {
+      try {
+        setMonthPositions(JSON.parse(saved));
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  // Save month positions
+  const saveMonthPositions = useCallback((positions: Record<string, { x: number; y: number }>) => {
+    setMonthPositions(positions);
+    localStorage.setItem("planner-month-positions", JSON.stringify(positions));
+  }, []);
+
   // ─── Sync refs ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -178,19 +203,34 @@ export default function Home() {
     [anchorGlobal, PAGE_STRIDE]
   );
 
-  // Months to render (sliding window around focused month)
+  // Months to render: use stored positions, fallback to computed
   const monthPages = useMemo(() => {
-    const pages = [];
+    const pages: { year: number; month: number; x: number; y: number }[] = [];
+    const seen = new Set<string>();
+
+    // First: add all months that have custom positions
+    for (const [key, pos] of Object.entries(monthPositions)) {
+      const [y, m] = key.split("-").map(Number);
+      pages.push({ year: y, month: m, x: pos.x, y: pos.y });
+      seen.add(key);
+    }
+
+    // Then: add months in the sliding window that aren't already placed
     for (let i = -RENDER_RANGE; i <= RENDER_RANGE; i++) {
       const d = new Date(focusedYear, focusedMonth + i, 1);
-      pages.push({
-        year: d.getFullYear(),
-        month: d.getMonth(),
-        x: getMonthX(d.getFullYear(), d.getMonth()),
-      });
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!seen.has(key)) {
+        pages.push({
+          year: d.getFullYear(),
+          month: d.getMonth(),
+          x: getMonthX(d.getFullYear(), d.getMonth()),
+          y: 0,
+        });
+      }
     }
+
     return pages;
-  }, [focusedYear, focusedMonth, getMonthX]);
+  }, [focusedYear, focusedMonth, getMonthX, monthPositions]);
 
   // ─── Localhost detection ───────────────────────────────────────────
   const isLocalNetwork = () => {
@@ -597,6 +637,37 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // ─── Month card drag handler ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (!draggingMonth) return;
+
+    const handleMouseMove = (e: globalThis.MouseEvent) => {
+      const s = scaleRef.current;
+      const dx = (e.clientX - dragMonthStart.current.mouseX) / s;
+      const dy = (e.clientY - dragMonthStart.current.mouseY) / s;
+      setMonthPositions((prev) => ({
+        ...prev,
+        [draggingMonth]: {
+          x: dragMonthStart.current.cardX + dx,
+          y: dragMonthStart.current.cardY + dy,
+        },
+      }));
+    };
+
+    const handleMouseUp = () => {
+      saveMonthPositions(monthPositions);
+      setDraggingMonth(null);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [draggingMonth, monthPositions, saveMonthPositions]);
+
   // ─── Resize handlers (col + row) ─────────────────────────────────────
 
   useEffect(() => {
@@ -740,6 +811,9 @@ export default function Home() {
           <Button variant="outline" size="xs" onClick={centerCalendar} className="hidden sm:inline-flex">
             Center
           </Button>
+          <Button variant="outline" size="xs" onClick={() => setShowMonthPicker(true)} className="hidden sm:inline-flex">
+            + Month
+          </Button>
           <div className="hidden sm:block w-px h-4 bg-neutral-200" />
           <Button variant="outline" size="xs" onClick={() => setShowExportModal(true)} title="Export data">
             Export
@@ -774,9 +848,10 @@ export default function Home() {
           touchAction: "none",
         }}
         onPointerDown={(e) => {
-          // If they click on the calendar cards, ignore (let them select text/blocks)
+          // If they click on the canvas background, deselect month & start drag
           const target = e.target as HTMLElement;
           if (target === canvasRef.current) {
+            setSelectedMonth(null);
             setIsDraggingCanvas(true);
             dragStartRef.current = {
               mouseX: e.clientX,
@@ -784,7 +859,6 @@ export default function Home() {
               offsetX: offset.x,
               offsetY: offset.y,
             };
-            // Prevent text selection while dragging
             e.preventDefault();
           }
         }}
@@ -805,57 +879,83 @@ export default function Home() {
             const weeks = getMonthWeeks(page.year, page.month);
             const isFocused =
               page.year === focusedYear && page.month === focusedMonth;
+            const monthKey = `${page.year}-${page.month}`;
+            const isSelected = selectedMonth === monthKey;
 
             return (
               <div
-                key={`${page.year}-${page.month}`}
+                key={monthKey}
                 style={{
                   position: "absolute",
                   left: page.x,
-                  top: 0,
+                  top: page.y,
                   width: pageWidth,
                 }}
               >
-                {/* Month title */}
+                {/* Month title / drag handle */}
                 <div
-                  className="flex items-center justify-between px-1 select-none"
+                  className={`flex items-center justify-between px-1 select-none ${
+                    draggingMonth === monthKey ? "cursor-grabbing" : "cursor-grab"
+                  }`}
                   style={{ height: TITLE_HEIGHT }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelectedMonth(monthKey);
+                    setDraggingMonth(monthKey);
+                    dragMonthStart.current = {
+                      mouseX: e.clientX,
+                      mouseY: e.clientY,
+                      cardX: page.x,
+                      cardY: page.y,
+                    };
+                  }}
                 >
                   <span
-                    className={`text-sm font-semibold cursor-pointer hover:underline ${
-                      isFocused ? "text-neutral-900" : "text-neutral-400 hover:text-neutral-600"
+                    className={`text-sm font-semibold ${
+                      isSelected ? "text-blue-600" : isFocused ? "text-neutral-900" : "text-neutral-400"
                     }`}
-                    onClick={() => navigateToMonth(page.year, page.month)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateToMonth(page.year, page.month);
+                    }}
                   >
                     {MONTH_NAMES[page.month]} {page.year}
                   </span>
-                  {isFocused && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
-                        onClick={() => navigateToMonth(page.year, page.month - 1)}
-                      >
-                        ‹ Prev
-                      </button>
-                      <button
-                        className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
-                        onClick={() => navigateToMonth(page.year, page.month + 1)}
-                      >
-                        Next ›
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <button
+                      className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); navigateToMonth(page.year, page.month - 1); }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="text-neutral-400 hover:text-neutral-700 text-xs px-1 rounded hover:bg-neutral-100 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); navigateToMonth(page.year, page.month + 1); }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
 
                 {/* Calendar card */}
                 <div
-                  className="bg-white rounded-xl border border-neutral-200 overflow-hidden"
+                  className={`bg-white rounded-xl overflow-hidden transition-shadow ${
+                    isSelected
+                      ? "ring-2 ring-blue-500 border border-blue-300"
+                      : "border border-neutral-200"
+                  }`}
                   style={{
-                    boxShadow: isFocused
-                      ? "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)"
-                      : "0 1px 3px rgba(0,0,0,0.03)",
+                    boxShadow: isSelected
+                      ? "0 4px 12px rgba(59,130,246,0.15)"
+                      : isFocused
+                        ? "0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.04)"
+                        : "0 1px 3px rgba(0,0,0,0.03)",
                   }}
                 >
+
                   {/* Day headers */}
                   <div
                     className="flex border-b border-neutral-200"
@@ -1115,6 +1215,64 @@ export default function Home() {
               </button>
             </div>
             <button onClick={() => { setShowImportModal(false); setImportText(""); }} className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors w-full text-center pt-1">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Month Picker Modal ────────────────────────────────────── */}
+      {showMonthPicker && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowMonthPicker(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-[320px] space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-neutral-800">Add Month</h2>
+            <div className="flex items-center justify-between">
+              <button onClick={() => setPickerYear((y) => y - 1)} className="text-neutral-500 hover:text-neutral-800 text-sm px-2 py-1 rounded hover:bg-neutral-100">
+                ‹
+              </button>
+              <span className="text-sm font-medium">{pickerYear}</span>
+              <button onClick={() => setPickerYear((y) => y + 1)} className="text-neutral-500 hover:text-neutral-800 text-sm px-2 py-1 rounded hover:bg-neutral-100">
+                ›
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {MONTH_NAMES.map((name, mi) => {
+                const key = `${pickerYear}-${mi}`;
+                const alreadyExists = monthPositions[key] !== undefined ||
+                  monthPages.some((p) => p.year === pickerYear && p.month === mi);
+                return (
+                  <button
+                    key={mi}
+                    disabled={alreadyExists}
+                    className={`px-2 py-2 text-xs rounded-lg transition-colors ${
+                      alreadyExists
+                        ? "bg-neutral-100 text-neutral-300 cursor-not-allowed"
+                        : "bg-neutral-50 hover:bg-blue-50 hover:text-blue-700 text-neutral-700"
+                    }`}
+                    onClick={() => {
+                      // Place new month near center of viewport
+                      const s = scaleRef.current;
+                      const ox = offsetRef.current.x;
+                      const oy = offsetRef.current.y;
+                      const canvas = canvasRef.current;
+                      const cx = canvas ? (canvas.clientWidth / 2 - ox) / s : 0;
+                      const cy = canvas ? (canvas.clientHeight / 2 - oy) / s : 0;
+
+                      const newPositions = {
+                        ...monthPositions,
+                        [key]: { x: cx - pageWidth / 2, y: cy - 200 },
+                      };
+                      saveMonthPositions(newPositions);
+                      setShowMonthPicker(false);
+                      navigateToMonth(pickerYear, mi);
+                    }}
+                  >
+                    {name.substring(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+            <button onClick={() => setShowMonthPicker(false)} className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors w-full text-center pt-1">
               Cancel
             </button>
           </div>
