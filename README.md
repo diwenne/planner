@@ -46,18 +46,15 @@ Go to [localhost:3000](http://localhost:3000).
 
 Click any day and start typing. Changes save automatically.
 
-### Shortcuts
+### Formatting
 
-Type at the start of an empty line, then press Space:
+Type `/` to open the command menu (to-do, heading, quote, numbered list, etc).
 
-| Input | Result |
-|:------|:-------|
-| `- []` | To-do checkbox |
-| `- [x]` | Checked to-do |
-| `1.` | Numbered list |
-| `#` | Heading |
-| `>` | Quote |
-| `/` | Command menu |
+You can also type these at the start of an empty line then press Space:
+
+- `- []` for a to-do checkbox
+- `1.` for a numbered list
+- `#` for a heading
 
 ### Keyboard
 
@@ -70,9 +67,9 @@ Type at the start of an empty line, then press Space:
 | Cmd/Ctrl + Minus | Zoom out |
 | Cmd/Ctrl + 0 | Reset zoom |
 
-### Pasting from Notion
+### Pasting from Notion / Markdown
 
-Copy tasks from Notion and paste them directly. Lines starting with `- [ ]` become checkboxes.
+Copy tasks from Notion (or any markdown) and paste them directly. Lines starting with `- [ ]` become checkboxes automatically.
 
 ### Export / Import
 
