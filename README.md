@@ -1,116 +1,94 @@
-# 📅 Planner
+# Planner
 
-A clean, minimal planner that works right in your browser. No account needed, no sign-up, no cloud — your data stays on your computer.
+A minimal calendar planner that runs in your browser. No account needed. Your data saves automatically.
 
-## 🚀 Try It Now (No Setup Required)
-
-**Just open this link:** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
-
-- Your data saves automatically to your browser
-- It stays even if you close the tab or restart your computer
-- Use the **Export** button to back up your notes as a file
-- Use the **Import** button to restore from a backup
-
-> **⚠️ Heads up:** If you clear your browser data/cookies, your notes will be erased. Use the Export button regularly to keep a backup!
+**Live version:** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
 
 ---
 
-## 🖥️ Run It Locally (Optional)
+## Quick Start
 
-If you want to run it on your own computer for faster performance or to keep a local copy of your data, follow these steps:
+If you just want to use it, open the link above. Everything saves to your browser automatically.
 
-### Step 1: Install Node.js
+To back up your data or move it to another device, use the **Export** and **Import** buttons in the top bar.
 
-You need Node.js installed. If you don't have it:
+---
 
-1. Go to [nodejs.org](https://nodejs.org)
-2. Download the **LTS** version (the big green button)
-3. Open the installer and follow the steps
+## Running Locally
 
-### Step 2: Download the Planner
+Running locally saves your data to a file on your computer so it never gets lost.
 
-1. Go to [github.com/diwenne/planner](https://github.com/diwenne/planner)
-2. Click the green **Code** button → **Download ZIP**
-3. Unzip the folder somewhere you can find it (like your Desktop)
+### Prerequisites
 
-### Step 3: Open a Terminal
+Install Node.js from [nodejs.org](https://nodejs.org) (download the LTS version).
 
-**On Mac:**
-1. Open the app called **Terminal** (search for it in Spotlight with `Cmd + Space`)
-2. Type `cd ` (with a space after it), then drag the unzipped planner folder into the Terminal window and press Enter
+### Setup
 
-**On Windows:**
-1. Open the app called **Command Prompt** (search for it in the Start menu)
-2. Type `cd ` (with a space after it), then paste the path to your unzipped planner folder and press Enter
+**Mac:** Open **Terminal** (search for it with Cmd + Space).
 
-### Step 4: Install & Run
+**Windows:** Open **Command Prompt** (search for it in the Start menu).
 
-Type these two commands, one at a time:
+Then run:
 
 ```
+cd path/to/planner
 npm install
-```
-
-```
 npm run dev
 ```
 
-You'll see a message like:
-
-```
-▲ Next.js 16.x.x
-- Local: http://localhost:3000
-```
-
-Open [localhost:3000](http://localhost:3000) in your browser — that's your planner!
-
-> **💡 Tip:** When you run locally, your data saves to a file on your computer (`data/planner.json`), so you'll never lose it.
+Open [localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## ✏️ How to Use
+## Usage
 
-### Typing
-Just click on any day and start typing. Your changes save automatically.
+### Editing
 
-### Shortcuts
-Type these at the start of an empty line, then press **Space**:
+Click any day cell and start typing. Changes save automatically.
 
-| What you type | What it becomes |
-|:---|:---|
-| `- []` | ☐ To-do checkbox |
-| `- [x]` | ☑ Checked to-do |
+### Shortcuts (type at the start of an empty line, then press Space)
+
+| Input | Result |
+|:------|:-------|
+| `- []` | To-do checkbox |
+| `- [x]` | Checked to-do |
 | `1.` | Numbered list |
-| `#` | Big heading |
-| `>` | Quote block |
-| `/` | Opens command menu |
+| `#` | Heading |
+| `>` | Quote |
+| `/` | Command menu |
 
 ### Keyboard Shortcuts
 
-| Shortcut | What it does |
-|:---|:---|
-| `Cmd + Z` | Undo |
-| `Cmd + Shift + Z` | Redo |
-| `Cmd + A` | Select all in a cell |
-| `Cmd + +` | Zoom in |
-| `Cmd + -` | Zoom out |
-| `Cmd + 0` | Reset zoom |
+| Shortcut | Action |
+|:---------|:-------|
+| Cmd/Ctrl + Z | Undo |
+| Cmd/Ctrl + Shift + Z | Redo |
+| Cmd/Ctrl + A | Select all in cell |
+| Cmd/Ctrl + Plus | Zoom in |
+| Cmd/Ctrl + Minus | Zoom out |
+| Cmd/Ctrl + 0 | Reset zoom |
 
 ### Navigation
-- **Scroll** or **drag** to pan around the calendar
-- **Pinch** or use `Cmd +/-` to zoom
-- Click **Today** to jump to the current date
-- Use **← →** arrows to switch months
+
+- Scroll or drag to pan
+- Pinch to zoom
+- Arrow buttons to switch months
 
 ### Pasting from Notion
-Copy your Notion todos and paste them directly — the planner will automatically convert `- [ ]` lines into checkboxes!
 
-### Backing Up Your Data
-- Click **Export** in the top bar to download your notes as a `.json` file
-- Click **Import** to restore from a backup file
+Copy your Notion tasks and paste them directly. Lines starting with `- [ ]` become checkboxes automatically.
+
+### Export / Import
+
+- **Export > Copy to Clipboard:** Copy your data as text. Paste it into the Import box on another device.
+- **Export > Download as File:** Save a `.json` backup file.
+- **Import > Upload File:** Restore from a `.json` file.
+- **Import > Paste:** Paste exported text to restore.
+
+If you clear your browser data, your notes will be erased. Export regularly.
 
 ---
 
-## 📄 License
+## License
 
 MIT

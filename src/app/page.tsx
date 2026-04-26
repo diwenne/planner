@@ -282,18 +282,32 @@ export default function Home() {
     [data]
   );
 
-  // ─── Export / Import ───────────────────────────────────────────────
+  // ─── Export / Import Modal ─────────────────────────────────────────
 
-  const exportData = useCallback(() => {
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  const exportAsFile = useCallback(() => {
     const dataStr = JSON.stringify(data, null, 2);
     const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
     const linkElement = document.createElement("a");
     linkElement.setAttribute("href", dataUri);
     linkElement.setAttribute("download", `planner-backup-${new Date().toISOString().split('T')[0]}.json`);
     linkElement.click();
+    setShowExportModal(false);
   }, [data]);
 
-  const importData = useCallback(() => {
+  const exportAsText = useCallback(() => {
+    const dataStr = JSON.stringify(data);
+    navigator.clipboard.writeText(dataStr).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => { setCopySuccess(false); setShowExportModal(false); }, 1200);
+    });
+  }, [data]);
+
+  const importFromFile = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
@@ -305,7 +319,7 @@ export default function Home() {
           const imported = JSON.parse(re.target.result);
           setData(imported);
           saveToLocalStorage(imported);
-          alert("Import successful!");
+          setShowImportModal(false);
         } catch (err) {
           alert("Failed to import: Invalid file");
         }
@@ -314,6 +328,19 @@ export default function Home() {
     };
     input.click();
   }, [saveToLocalStorage]);
+
+  const importFromText = useCallback(() => {
+    try {
+      const imported = JSON.parse(importText);
+      setData(imported);
+      saveToLocalStorage(imported);
+      setImportText("");
+      setShowImportModal(false);
+    } catch (err) {
+      alert("Failed to import: Invalid data. Make sure you pasted the full text.");
+    }
+  }, [importText, saveToLocalStorage]);
+
 
   // ─── Smooth animation helper ────────────────────────────────────────
 
@@ -555,15 +582,15 @@ export default function Home() {
       }}
     >
       {/* ── Fixed Toolbar ──────────────────────────────────────────── */}
-      <header className="border-b border-neutral-200 px-4 py-1.5 flex items-center justify-between shrink-0 bg-white z-30">
-        <div className="flex items-center gap-2.5">
+      <header className="border-b border-neutral-200 px-2 sm:px-4 py-1.5 flex items-center justify-between shrink-0 bg-white z-30">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <h1 className="text-sm font-semibold tracking-tight">Planner</h1>
           <div className="w-px h-4 bg-neutral-200" />
           <div className="flex items-center gap-0.5">
             <Button variant="ghost" size="icon-xs" onClick={prevMonth}>
               ←
             </Button>
-            <span className="text-[13px] font-medium min-w-[120px] text-center select-none">
+            <span className="text-[13px] font-medium min-w-[100px] sm:min-w-[120px] text-center select-none">
               {MONTH_NAMES[focusedMonth]} {focusedYear}
             </span>
             <Button variant="ghost" size="icon-xs" onClick={nextMonth}>
@@ -575,8 +602,8 @@ export default function Home() {
           </Button>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1 sm:gap-2.5">
+          <div className="hidden sm:flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="icon-xs"
@@ -595,18 +622,17 @@ export default function Home() {
               +
             </Button>
           </div>
-          <Button variant="outline" size="xs" onClick={centerCalendar}>
+          <Button variant="outline" size="xs" onClick={centerCalendar} className="hidden sm:inline-flex">
             Center
           </Button>
-          <div className="w-px h-4 bg-neutral-200" />
-          <Button variant="outline" size="xs" onClick={exportData} title="Export data to JSON">
+          <div className="hidden sm:block w-px h-4 bg-neutral-200" />
+          <Button variant="outline" size="xs" onClick={() => setShowExportModal(true)} title="Export data">
             Export
           </Button>
-          <Button variant="outline" size="xs" onClick={importData} title="Import data from JSON">
+          <Button variant="outline" size="xs" onClick={() => setShowImportModal(true)} title="Import data">
             Import
           </Button>
-          <div className="w-px h-4 bg-neutral-200" />
-          <span className="text-[11px] text-neutral-400 select-none">
+          <span className="hidden lg:inline text-[11px] text-neutral-400 select-none ml-1">
             Pinch to zoom · Scroll to pan ·{" "}
             <kbd className="px-1 py-0.5 bg-neutral-100 rounded text-[10px] font-mono">
               /
@@ -615,6 +641,7 @@ export default function Home() {
           </span>
         </div>
       </header>
+
 
       {/* ── Infinite Canvas ─────────────────────────────────────────── */}
       <div
@@ -888,6 +915,78 @@ export default function Home() {
           })}
         </div>
       </div>
+
+      {/* ── Export Modal ──────────────────────────────────────────── */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowExportModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-[340px] space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-neutral-800">Export Your Data</h2>
+            <p className="text-xs text-neutral-500">Choose how to save your planner data:</p>
+            <div className="space-y-2">
+              <button
+                onClick={exportAsText}
+                className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <div className="text-sm font-medium text-neutral-800">
+                  {copySuccess ? "✓ Copied!" : "📋 Copy to Clipboard"}
+                </div>
+                <div className="text-[11px] text-neutral-400 mt-0.5">Paste it into another browser to restore</div>
+              </button>
+              <button
+                onClick={exportAsFile}
+                className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <div className="text-sm font-medium text-neutral-800">📁 Download as File</div>
+                <div className="text-[11px] text-neutral-400 mt-0.5">Save a .json backup to your computer</div>
+              </button>
+            </div>
+            <button onClick={() => setShowExportModal(false)} className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors w-full text-center pt-1">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Import Modal ──────────────────────────────────────────── */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setShowImportModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-[380px] space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-neutral-800">Import Data</h2>
+            <p className="text-xs text-neutral-500">Restore your planner from a backup:</p>
+            <div className="space-y-3">
+              <button
+                onClick={importFromFile}
+                className="w-full px-4 py-2.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 transition-colors text-left"
+              >
+                <div className="text-sm font-medium text-neutral-800">📁 Upload File</div>
+                <div className="text-[11px] text-neutral-400 mt-0.5">Select a .json backup file</div>
+              </button>
+              <div className="relative">
+                <div className="absolute inset-x-0 top-1/2 h-px bg-neutral-200" />
+                <div className="relative flex justify-center">
+                  <span className="bg-white px-2 text-[10px] text-neutral-400">or paste your data</span>
+                </div>
+              </div>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder='Paste your exported data here...'
+                className="w-full h-24 px-3 py-2 text-xs border border-neutral-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-neutral-300 font-mono"
+              />
+              <button
+                onClick={importFromText}
+                disabled={!importText.trim()}
+                className="w-full px-4 py-2 rounded-lg bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                Import from Text
+              </button>
+            </div>
+            <button onClick={() => { setShowImportModal(false); setImportText(""); }} className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors w-full text-center pt-1">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
