@@ -177,16 +177,45 @@ export default function Home() {
     return pages;
   }, [focusedYear, focusedMonth, getMonthX]);
 
+  // ─── Localhost detection ───────────────────────────────────────────
+  const isLocalNetwork = () => {
+    const h = window.location.hostname;
+    return h === "localhost" || h === "127.0.0.1" || h.endsWith(".local");
+  };
+
+  const [isLocal, setIsLocal] = useState(false);
+  useEffect(() => {
+    setIsLocal(isLocalNetwork());
+  }, []);
+
   // ─── Data fetching ──────────────────────────────────────────────────
 
   useEffect(() => {
-    fetch("/api/planner")
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
+    const savedData = localStorage.getItem("planner-data");
+    
+    // If we have local storage, use it (works for everyone)
+    if (savedData) {
+      try {
+        setData(JSON.parse(savedData));
         setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
+        return;
+      } catch (e) {
+        console.error("Failed to parse saved data", e);
+      }
+    }
+
+    // If no local storage AND we are on local network, pull from the JSON file
+    if (isLocalNetwork()) {
+      fetch("/api/planner")
+        .then((r) => r.json())
+        .then((d) => {
+          setData(d);
+          setLoaded(true);
+        })
+        .catch(() => setLoaded(true));
+    } else {
+      setLoaded(true);
+    }
   }, []);
 
   // ─── Center on mount ────────────────────────────────────────────────
@@ -208,7 +237,11 @@ export default function Home() {
 
   // ─── Auto-save ──────────────────────────────────────────────────────
 
-  const saveDate = useCallback((date: string, blocks: Block[]) => {
+  const saveToLocalStorage = useCallback((updatedData: PlannerData) => {
+    localStorage.setItem("planner-data", JSON.stringify(updatedData));
+  }, []);
+
+  const saveToServer = useCallback((date: string, blocks: Block[]) => {
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
       fetch("/api/planner", {
@@ -222,10 +255,18 @@ export default function Home() {
   const handleBlocksChange = useCallback(
     (date: string, blocks: Block[]) => {
       delete defaultBlocksRef.current[date];
-      setData((prev) => ({ ...prev, [date]: blocks }));
-      saveDate(date, blocks);
+      setData((prev) => {
+        const next = { ...prev, [date]: blocks };
+        saveToLocalStorage(next);
+        return next;
+      });
+      
+      // ONLY sync to JSON file if on local network
+      if (isLocalNetwork()) {
+        saveToServer(date, blocks);
+      }
     },
-    [saveDate]
+    [saveToLocalStorage, saveToServer]
   );
 
   const getBlocks = useCallback(
@@ -240,6 +281,39 @@ export default function Home() {
     },
     [data]
   );
+
+  // ─── Export / Import ───────────────────────────────────────────────
+
+  const exportData = useCallback(() => {
+    const dataStr = JSON.stringify(data, null, 2);
+    const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+    const linkElement = document.createElement("a");
+    linkElement.setAttribute("href", dataUri);
+    linkElement.setAttribute("download", `planner-backup-${new Date().toISOString().split('T')[0]}.json`);
+    linkElement.click();
+  }, [data]);
+
+  const importData = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (re: any) => {
+        try {
+          const imported = JSON.parse(re.target.result);
+          setData(imported);
+          saveToLocalStorage(imported);
+          alert("Import successful!");
+        } catch (err) {
+          alert("Failed to import: Invalid file");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, [saveToLocalStorage]);
 
   // ─── Smooth animation helper ────────────────────────────────────────
 
@@ -365,6 +439,31 @@ export default function Home() {
     el.addEventListener("wheel", handler, { passive: false });
     return () => el.removeEventListener("wheel", handler);
   }, [loaded]);
+
+  // ─── Keyboard zoom handler (Cmd+ / Cmd-) ────────────────────────────
+
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      const isZoomIn = (e.metaKey || e.ctrlKey) && (e.key === "=" || e.key === "+");
+      const isZoomOut = (e.metaKey || e.ctrlKey) && e.key === "-";
+      const isZoomReset = (e.metaKey || e.ctrlKey) && e.key === "0";
+
+      if (isZoomIn || isZoomOut || isZoomReset) {
+        e.preventDefault();
+        
+        if (isZoomReset) {
+          setScale(1);
+          return;
+        }
+
+        const factor = isZoomOut ? 0.85 : 1.15;
+        setScale((s) => Math.min(4, Math.max(0.15, s * factor)));
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ─── Resize handlers (col + row) ─────────────────────────────────────
 
@@ -498,6 +597,13 @@ export default function Home() {
           </div>
           <Button variant="outline" size="xs" onClick={centerCalendar}>
             Center
+          </Button>
+          <div className="w-px h-4 bg-neutral-200" />
+          <Button variant="outline" size="xs" onClick={exportData} title="Export data to JSON">
+            Export
+          </Button>
+          <Button variant="outline" size="xs" onClick={importData} title="Import data from JSON">
+            Import
           </Button>
           <div className="w-px h-4 bg-neutral-200" />
           <span className="text-[11px] text-neutral-400 select-none">

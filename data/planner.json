@@ -9,8 +9,14 @@
   "2026-04-26": [
     {
       "id": "8y5wllt",
-      "type": "text",
-      "content": ""
+      "type": "todo",
+      "content": "finish math worksheets",
+      "checked": true
+    },
+    {
+      "id": "x7of37z",
+      "type": "h1",
+      "content": "pls star my repo"
     }
   ],
   "2026-04-22": [
@@ -75,6 +81,30 @@
   ],
   "2026-04-24": [
     {
+      "id": "csx92fz",
+      "type": "todo",
+      "content": "buy energy drink + creator phone",
+      "checked": true
+    },
+    {
+      "id": "427o7ic",
+      "type": "todo",
+      "content": "film studying broll",
+      "checked": false
+    },
+    {
+      "id": "12nioqr",
+      "type": "todo",
+      "content": "script 2 reels",
+      "checked": false
+    },
+    {
+      "id": "dtzr2zu",
+      "type": "todo",
+      "content": "finish 12M",
+      "checked": true
+    },
+    {
       "id": "default-2026-04-24",
       "type": "todo",
       "content": "finish vector and complex number worksheets",
@@ -83,21 +113,26 @@
     {
       "id": "ccruzg9",
       "type": "todo",
-      "content": "textbook questions",
-      "checked": false
+      "content": "start textbook review",
+      "checked": true
     },
     {
       "id": "o7t2v42",
       "type": "todo",
       "content": "make a reel bruh",
       "checked": false
+    },
+    {
+      "id": "nnvqze7",
+      "type": "text",
+      "content": ""
     }
   ],
   "2026-05-05": [
     {
       "id": "default-2026-05-05",
       "type": "h1",
-      "content": "math test"
+      "content": "math HL test"
     }
   ],
   "2026-05-08": [
@@ -105,6 +140,11 @@
       "id": "default-2026-05-08",
       "type": "h1",
       "content": "french test"
+    },
+    {
+      "id": "jsa596t",
+      "type": "h1",
+      "content": "geo test...."
     }
   ],
   "2026-05-01": [
@@ -132,14 +172,36 @@
     {
       "id": "default-2026-04-25",
       "type": "todo",
-      "content": "finish textbook questions",
-      "checked": false
+      "content": "finish textbook review",
+      "checked": true
     },
     {
       "id": "8qqwjp8",
       "type": "todo",
       "content": "post reel",
       "checked": false
+    },
+    {
+      "id": "ypr8s2y",
+      "type": "todo",
+      "content": "edit reel ",
+      "checked": false
+    },
+    {
+      "id": "64qflrf",
+      "type": "todo",
+      "content": "organize b roll",
+      "checked": false
+    },
+    {
+      "id": "hwco4hx",
+      "type": "text",
+      "content": "- sfx, music, burners, record what other b roll to film"
+    },
+    {
+      "id": "c4vv2kb",
+      "type": "text",
+      "content": ""
     }
   ],
   "2026-04-28": [
@@ -151,9 +213,290 @@
   ],
   "2026-04-05": [
     {
-      "id": "default-2026-04-05",
+      "id": "dnj6x1t",
       "type": "text",
-      "content": "/"
+      "content": ""
+    }
+  ],
+  "2026-04-21": [
+    {
+      "id": "vsrpjqo",
+      "type": "todo",
+      "content": " questions for grewal: how to compare electronegativity of noble gases",
+      "checked": false
+    },
+    {
+      "id": "zht1u85",
+      "type": "todo",
+      "content": " can i shorthadn for ions",
+      "checked": false
+    },
+    {
+      "id": "dbm780s",
+      "type": "todo",
+      "content": " chem worksheets",
+      "checked": false
+    },
+    {
+      "id": "1argvnc",
+      "type": "todo",
+      "content": " chem pestle",
+      "checked": false
+    },
+    {
+      "id": "fbxdm6v",
+      "type": "todo",
+      "content": " script for a reel",
+      "checked": false
+    }
+  ],
+  "2026-04-20": [
+    {
+      "id": "f4q08qf",
+      "type": "todo",
+      "content": " french grammar exam",
+      "checked": false
+    },
+    {
+      "id": "riernvg",
+      "type": "todo",
+      "content": " the vocab assignments on inthinking",
+      "checked": false
+    },
+    {
+      "id": "f2ktak7",
+      "type": "todo",
+      "content": " next week grammar+vocab",
+      "checked": false
+    },
+    {
+      "id": "vhs382a",
+      "type": "todo",
+      "content": " math test",
+      "checked": false
+    },
+    {
+      "id": "douszif",
+      "type": "todo",
+      "content": " chem test",
+      "checked": false
+    },
+    {
+      "id": "cp0jt8w",
+      "type": "todo",
+      "content": " geo test",
+      "checked": false
+    }
+  ],
+  "2026-04-19": [
+    {
+      "id": "22635v8",
+      "type": "todo",
+      "content": " chem worksehets",
+      "checked": false
+    },
+    {
+      "id": "av049tk",
+      "type": "todo",
+      "content": " script for reel",
+      "checked": false
+    },
+    {
+      "id": "x48fk2t",
+      "type": "todo",
+      "content": " geo canned notes",
+      "checked": false
+    },
+    {
+      "id": "taylt0b",
+      "type": "todo",
+      "content": " chem questions:",
+      "checked": false
+    }
+  ],
+  "2026-04-16": [
+    {
+      "id": "k42a4je",
+      "type": "todo",
+      "content": " finish chem textbook",
+      "checked": false
+    },
+    {
+      "id": "yld0ihc",
+      "type": "todo",
+      "content": " push out physics trial reel",
+      "checked": false
+    }
+  ],
+  "2026-04-15": [
+    {
+      "id": "c76o7q6",
+      "type": "bullet",
+      "content": "matter and separation techniques"
+    },
+    {
+      "id": "20u0lh2",
+      "type": "bullet",
+      "content": "atomic number atomoic mass isotopes"
+    },
+    {
+      "id": "o459lpz",
+      "type": "bullet",
+      "content": "electron and core notation"
+    },
+    {
+      "id": "8lmhgmv",
+      "type": "bullet",
+      "content": "periodic trends"
+    }
+  ],
+  "2026-04-13": [
+    {
+      "id": "default-2026-04-13",
+      "type": "text",
+      "content": ""
+    }
+  ],
+  "2026-04-09": [
+    {
+      "id": "co3moxq",
+      "type": "todo",
+      "content": "generic french essay",
+      "checked": false
+    },
+    {
+      "id": "m0vej7q",
+      "type": "todo",
+      "content": "clc mentor interview assignment",
+      "checked": false
+    },
+    {
+      "id": "guwhjfg",
+      "type": "todo",
+      "content": "one chapter of math",
+      "checked": false
+    }
+  ],
+  "2026-04-03": [
+    {
+      "id": "xwudam8",
+      "type": "todo",
+      "content": "post devdiwen english hl",
+      "checked": true
+    },
+    {
+      "id": "jx12i7y",
+      "type": "todo",
+      "content": "finish readin gkitchen",
+      "checked": true
+    },
+    {
+      "id": "9duljft",
+      "type": "todo",
+      "content": "push solace to app store",
+      "checked": true
+    },
+    {
+      "id": "iifx4a2",
+      "type": "todo",
+      "content": "vectors prac",
+      "checked": true
+    },
+    {
+      "id": "26h7dlu",
+      "type": "todo",
+      "content": "english write timeline+understanding+prompt",
+      "checked": true
+    }
+  ],
+  "2026-03-17": [
+    {
+      "id": "77njmxo",
+      "type": "todo",
+      "content": "do 2 french RC",
+      "checked": false
+    },
+    {
+      "id": "rmot39q",
+      "type": "todo",
+      "content": "stemsf website + add chapters",
+      "checked": false
+    },
+    {
+      "id": "67kup3n",
+      "type": "todo",
+      "content": "geo chapter 3",
+      "checked": false
+    },
+    {
+      "id": "54sxku2",
+      "type": "todo",
+      "content": "physics B1.1",
+      "checked": false
+    },
+    {
+      "id": "iqutjy1",
+      "type": "todo",
+      "content": "email ms lane for macbeth write",
+      "checked": false
+    },
+    {
+      "id": "o8uvml9",
+      "type": "todo",
+      "content": "email ajagbe with a write",
+      "checked": false
+    }
+  ],
+  "2026-03-21": [
+    {
+      "id": "5qvwt6a",
+      "type": "todo",
+      "content": "CH3 geo",
+      "checked": false
+    },
+    {
+      "id": "u0gvlh3",
+      "type": "todo",
+      "content": "ch4 geo",
+      "checked": false
+    },
+    {
+      "id": "vrvxp3h",
+      "type": "todo",
+      "content": "refine englihs essay to a 20",
+      "checked": false
+    },
+    {
+      "id": "lh49684",
+      "type": "todo",
+      "content": "email ajagbe with an oral script",
+      "checked": false
+    },
+    {
+      "id": "n2hpewd",
+      "type": "todo",
+      "content": "mock papers",
+      "checked": false
+    }
+  ],
+  "2026-06-26": [
+    {
+      "id": "default-2026-06-26",
+      "type": "todo",
+      "content": "finish vector review set 12A",
+      "checked": true
+    },
+    {
+      "id": "js0sfnv",
+      "type": "todo",
+      "content": "finish vector review set 13A",
+      "checked": true
+    },
+    {
+      "id": "a5b5zzb",
+      "type": "todo",
+      "content": "finish editing a reel",
+      "checked": false
     }
   ]
 }

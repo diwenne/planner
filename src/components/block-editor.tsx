@@ -14,9 +14,13 @@ import { Block } from "@/lib/types";
 
 const SLASH_COMMANDS = [
   { command: "/todo", label: "To-do", type: "todo" as const, icon: "☐" },
+  { command: "/number", label: "Numbered List", type: "number" as const, icon: "1." },
   { command: "/h1", label: "Heading 1", type: "h1" as const, icon: "H₁" },
   { command: "/h2", label: "Heading 2", type: "h2" as const, icon: "H₂" },
   { command: "/h3", label: "Heading 3", type: "h3" as const, icon: "H₃" },
+  { command: "/quote", label: "Quote", type: "quote" as const, icon: "“" },
+  { command: "/divider", label: "Divider", type: "divider" as const, icon: "—" },
+  { command: "/code", label: "Code", type: "code" as const, icon: "<>" },
   { command: "/text", label: "Text", type: "text" as const, icon: "¶" },
 ];
 
@@ -41,8 +45,13 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
     null
   );
   const [selectedMenuIndex, setSelectedMenuIndex] = useState(0);
+  const [history, setHistory] = useState<Block[][]>([blocks]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  
   const blockRefs = useRef<Record<string, HTMLElement | null>>({});
   const pendingFocusId = useRef<string | null>(null);
+  const isUndoRedoing = useRef(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -76,13 +85,62 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
     }
   });
 
+  // ─── History management ─────────────────────────────────────────────
+
+  const pushToHistory = useCallback((newBlocks: Block[]) => {
+    if (isUndoRedoing.current) return;
+    setHistory((prev) => {
+      const next = prev.slice(0, currentHistoryIndex + 1);
+      if (JSON.stringify(next[next.length - 1]) === JSON.stringify(newBlocks)) return next;
+      // Limit history to 50 steps
+      const updated = [...next, newBlocks];
+      if (updated.length > 50) updated.shift();
+      setCurrentHistoryIndex(updated.length - 1);
+      return updated;
+    });
+  }, [currentHistoryIndex]);
+
+  const undo = useCallback(() => {
+    if (currentHistoryIndex > 0) {
+      isUndoRedoing.current = true;
+      const prev = history[currentHistoryIndex - 1];
+      setCurrentHistoryIndex(currentHistoryIndex - 1);
+      onChange(prev);
+      // Wait for React to update and reset the flag
+      setTimeout(() => { isUndoRedoing.current = false; }, 0);
+    }
+  }, [currentHistoryIndex, history, onChange]);
+
+  const redo = useCallback(() => {
+    if (currentHistoryIndex < history.length - 1) {
+      isUndoRedoing.current = true;
+      const next = history[currentHistoryIndex + 1];
+      setCurrentHistoryIndex(currentHistoryIndex + 1);
+      onChange(next);
+      setTimeout(() => { isUndoRedoing.current = false; }, 0);
+    }
+  }, [currentHistoryIndex, history, onChange]);
+
+  // Handle outside updates to blocks (like from other cells or initial load)
+  useEffect(() => {
+    if (!isUndoRedoing.current) {
+        setHistory([blocks]);
+        setCurrentHistoryIndex(0);
+    }
+  }, []); // Only on mount
+
   // ─── Block operations ─────────────────────────────────────────────────
+
+  const updateBlocks = useCallback((newBlocks: Block[]) => {
+    pushToHistory(newBlocks);
+    onChange(newBlocks);
+  }, [pushToHistory, onChange]);
 
   const updateBlock = useCallback(
     (id: string, updates: Partial<Block>) => {
-      onChange(blocks.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+      updateBlocks(blocks.map((b) => (b.id === id ? { ...b, ...updates } : b)));
     },
-    [blocks, onChange]
+    [blocks, updateBlocks]
   );
 
   const addBlockAfter = useCallback(
@@ -91,10 +149,22 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
       const idx = blocks.findIndex((b) => b.id === afterId);
       const updated = [...blocks];
       updated.splice(idx + 1, 0, newBlock);
-      onChange(updated);
+      updateBlocks(updated);
       pendingFocusId.current = newBlock.id;
     },
-    [blocks, onChange]
+    [blocks, updateBlocks]
+  );
+
+  const addBlockBefore = useCallback(
+    (beforeId: string, type: Block["type"] = "text") => {
+      const newBlock: Block = { id: generateId(), type, content: "" };
+      const idx = blocks.findIndex((b) => b.id === beforeId);
+      const updated = [...blocks];
+      updated.splice(idx, 0, newBlock);
+      updateBlocks(updated);
+      pendingFocusId.current = newBlock.id;
+    },
+    [blocks, updateBlocks]
   );
 
   const deleteBlock = useCallback(
@@ -102,11 +172,11 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
       if (blocks.length <= 1) return;
       const idx = blocks.findIndex((b) => b.id === id);
       const updated = blocks.filter((b) => b.id !== id);
-      onChange(updated);
+      updateBlocks(updated);
       const prev = updated[Math.max(0, idx - 1)];
       if (prev) pendingFocusId.current = prev.id;
     },
-    [blocks, onChange]
+    [blocks, updateBlocks]
   );
 
   const applySlashCommand = useCallback(
@@ -127,9 +197,85 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
 
   // ─── Event handlers ──────────────────────────────────────────────────
 
+  const handlePaste = useCallback(
+    (id: string, e: React.ClipboardEvent) => {
+      const text = e.clipboardData.getData("text");
+      const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+
+      // If it's multi-line or starts with markdown-like indicators, split into blocks
+      if (
+        lines.length > 1 ||
+        lines[0].match(/^([-*] |[0-9]+\. |- ?\[[ xX]?\]\s|# |> )/)
+      ) {
+        e.preventDefault();
+
+        const idx = blocks.findIndex((b) => b.id === id);
+        const currentBlock = blocks[idx];
+        const newBlocks: Block[] = [];
+
+        lines.forEach((originalLine) => {
+          let type: Block["type"] = "text";
+          const line = originalLine.trim();
+          let content = line;
+          let checked = false;
+
+          if (line.match(/^-\s*\[[ xX]?\]\s/)) {
+            type = "todo";
+            content = line.replace(/^-\s*\[[ xX]?\]\s*/, "");
+            checked = /\[x\]/i.test(line);
+          } else if (line.match(/^[0-9]+\. /)) {
+            type = "number";
+            content = line.replace(/^[0-9]+\. /, "");
+          } else if (line.startsWith("# ")) {
+            type = "h1";
+            content = line.substring(2);
+          } else if (line.startsWith("## ")) {
+            type = "h2";
+            content = line.substring(3);
+          } else if (line.startsWith("### ")) {
+            type = "h3";
+            content = line.substring(4);
+          } else if (line.startsWith("> ")) {
+            type = "quote";
+            content = line.substring(2);
+          }
+
+          newBlocks.push({
+            id: generateId(),
+            type,
+            content: content.trim(),
+            ...(type === "todo" ? { checked } : {}),
+          });
+        });
+
+        const updated = [...blocks];
+        // If current block is empty text, replace it. Otherwise insert after.
+        if (currentBlock.content === "" && currentBlock.type === "text") {
+          updated.splice(idx, 1, ...newBlocks);
+        } else {
+          updated.splice(idx + 1, 0, ...newBlocks);
+        }
+
+        updateBlocks(updated);
+
+        // Clear refs for the replaced/new blocks so they re-init with correct textContent
+        newBlocks.forEach((nb) => {
+          if (blockRefs.current[nb.id]) {
+            blockRefs.current[nb.id]!.dataset.init = "";
+          }
+        });
+
+        pendingFocusId.current = newBlocks[newBlocks.length - 1].id;
+      }
+    },
+    [blocks, updateBlocks]
+  );
+
   const handleInput = useCallback(
     (id: string, e: React.FormEvent<HTMLElement>) => {
-      const text = (e.target as HTMLElement).textContent || "";
+      const rawText = (e.target as HTMLElement).textContent || "";
+      const text = rawText.replace(/\u00a0/g, " ");
+
       updateBlock(id, { content: text });
 
       const slashMatch = text.match(/\/(\S*)$/);
@@ -153,6 +299,7 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
         }
         setMenuPos(pos);
         setSlashMenu({ blockId: id, query: "/" + slashMatch[1] });
+
         setSelectedMenuIndex(0);
       } else {
         setSlashMenu(null);
@@ -195,9 +342,81 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
         }
       }
 
-      // Enter → new block
+      // Markdown shortcuts: detect pattern BEFORE Space is inserted
+      if (e.key === " ") {
+        const el = blockRefs.current[id];
+        const rawText = (el?.textContent || "").replace(/\u00a0/g, " ");
+
+        if (block.type === "text") {
+          // Todo: - [] or - [ ] or [] or - [x]
+          if (/^-\s*\[[ x]?\]$/i.test(rawText) || rawText === "[]") {
+            e.preventDefault();
+            const checked = /\[x\]/i.test(rawText);
+            if (el) { el.textContent = ""; el.dataset.init = ""; }
+            updateBlock(id, { type: "todo", content: "", checked });
+            return;
+          }
+          // Number: 1.
+          if (rawText === "1.") {
+            e.preventDefault();
+            if (el) { el.textContent = ""; el.dataset.init = ""; }
+            updateBlock(id, { type: "number", content: "" });
+            return;
+          }
+          // Heading: #
+          if (rawText === "#") {
+            e.preventDefault();
+            if (el) { el.textContent = ""; el.dataset.init = ""; }
+            updateBlock(id, { type: "h1", content: "" });
+            return;
+          }
+          // Quote: >
+          if (rawText === ">") {
+            e.preventDefault();
+            if (el) { el.textContent = ""; el.dataset.init = ""; }
+            updateBlock(id, { type: "quote", content: "" });
+            return;
+          }
+        }
+      }
+
+      // Select All (Cmd+A)
+      if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+        e.preventDefault();
+        const container = (e.currentTarget as HTMLElement).closest(".space-y-px");
+        if (container) {
+          const range = document.createRange();
+          range.selectNodeContents(container);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+          // Focus the container so it can catch the next Delete event
+          (container as HTMLElement).focus();
+        }
+      }
+
+      // Undo (Cmd+Z)
+      if ((e.metaKey || e.ctrlKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
+        
+        // If at start of line, insert BEFORE
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          if (range.startOffset === 0 && range.endOffset === 0) {
+            addBlockBefore(id);
+            return;
+          }
+        }
+        
         addBlockAfter(id);
       }
 
@@ -252,6 +471,12 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
         return "text-sm font-semibold leading-tight";
       case "h3":
         return "text-[13px] font-medium leading-tight";
+      case "quote":
+        return "text-xs italic border-l-2 border-neutral-200 pl-2 text-neutral-600";
+      case "code":
+        return "text-[10px] font-mono bg-neutral-50 px-1.5 py-1 rounded border border-neutral-100";
+      case "divider":
+        return "h-px bg-neutral-200 my-2";
       default:
         return "text-xs leading-relaxed";
     }
@@ -261,12 +486,20 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
     switch (type) {
       case "todo":
         return "To-do";
+      case "number":
+        return "Step";
       case "h1":
         return "Heading 1";
       case "h2":
         return "Heading 2";
       case "h3":
         return "Heading 3";
+      case "quote":
+        return "Quote";
+      case "code":
+        return "Code";
+      case "divider":
+        return "";
       default:
         return "Type / for commands";
     }
@@ -293,10 +526,37 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
 
   return (
     <>
-      <div className="space-y-px">
+      <div 
+        className="space-y-px outline-none select-text"
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key === "Backspace" || e.key === "Delete") {
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed) {
+              // If selection spans multiple blocks or is the container
+              if (sel.anchorNode !== sel.focusNode || e.target === e.currentTarget) {
+                e.preventDefault();
+                const firstBlockId = generateId();
+                updateBlocks([{ id: firstBlockId, type: "text", content: "" }]);
+                pendingFocusId.current = firstBlockId;
+              }
+            }
+          }
+        }}
+      >
         {blocks.map((block) => (
-          <div key={block.id} className="relative flex items-start gap-1.5">
-            {/* Checkbox for to-do */}
+          <div 
+            key={block.id} 
+            className="relative flex items-start gap-1.5 group/block cursor-text"
+            onClick={(e) => {
+              // If clicking the container (gutter), focus the editable area
+              const target = e.target as HTMLElement;
+              if (target.classList.contains('group/block') || target.tagName === 'DIV' && !target.hasAttribute('contenteditable')) {
+                blockRefs.current[block.id]?.focus();
+              }
+            }}
+          >
+            {/* Visual indicators for lists */}
             {block.type === "todo" && (
               <input
                 type="checkbox"
@@ -307,36 +567,53 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
                 className="mt-[3px] h-3.5 w-3.5 rounded border-neutral-300 accent-neutral-900 cursor-pointer shrink-0"
               />
             )}
+            {block.type === "number" && (
+              <div className="mt-[3px] text-[10px] font-bold text-neutral-900 shrink-0 min-w-[14px]">
+                {blocks.filter((b, i) => b.type === "number" && i <= blocks.indexOf(block)).length}.
+              </div>
+            )}
 
-            <div className="flex-1 relative min-w-0">
-              {/* contentEditable: NO React children — cursor stays put */}
-              <div
-                ref={(el) => {
-                  blockRefs.current[block.id] = el;
-                  if (el && !el.dataset.init) {
-                    el.dataset.init = "1";
-                    el.textContent = block.content;
-                  }
-                }}
-                contentEditable
-                suppressContentEditableWarning
-                className={`outline-none py-px min-h-[1.3em] ${blockStyle(
-                  block.type
-                )} ${
-                  block.type === "todo" && block.checked
-                    ? "line-through text-neutral-400"
-                    : "text-neutral-800"
-                }`}
-                onInput={(e) => handleInput(block.id, e)}
-                onKeyDown={(e) => handleKeyDown(block.id, e)}
-                onFocus={() => {
-                  if (slashMenu && slashMenu.blockId !== block.id)
-                    setSlashMenu(null);
-                }}
-              />
+            <div className={`flex-1 relative min-w-0 ${block.type === "divider" ? "invisible pointer-events-none" : ""}`}>
+              {/* Only show contentEditable if NOT a divider */}
+              {block.type !== "divider" && (
+                <div
+                  ref={(el) => {
+                    blockRefs.current[block.id] = el;
+                    if (el && !el.dataset.init) {
+                      el.dataset.init = "1";
+                      el.textContent = block.content;
+                    }
+                  }}
+                  contentEditable
+                  suppressContentEditableWarning
+                  className={`outline-none py-px min-h-[1.3em] ${blockStyle(
+                    block.type
+                  )} ${
+                    block.type === "todo" && block.checked
+                      ? "line-through text-neutral-400"
+                      : "text-neutral-800"
+                  }`}
+                  onInput={(e) => handleInput(block.id, e)}
+                  onKeyDown={(e) => handleKeyDown(block.id, e)}
+                  onPaste={(e) => handlePaste(block.id, e)}
+                  onFocus={() => {
+                    setFocusedId(block.id);
+                    if (slashMenu && slashMenu.blockId !== block.id)
+                      setSlashMenu(null);
+                  }}
+                  onBlur={() => setFocusedId(null)}
+                />
+              )}
+
+              {/* Divider line */}
+              {block.type === "divider" && (
+                <div className="absolute inset-0 flex items-center pointer-events-auto cursor-default" onClick={() => deleteBlock(block.id)}>
+                   <div className="w-full h-px bg-neutral-200" />
+                </div>
+              )}
 
               {/* Placeholder overlay */}
-              {!block.content && (
+              {!block.content && block.type !== "divider" && (
                 <div className="absolute inset-0 pointer-events-none text-neutral-300 py-px text-xs select-none">
                   {placeholderText(block.type)}
                 </div>
