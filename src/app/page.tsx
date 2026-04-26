@@ -892,7 +892,7 @@ export default function Home() {
                               return (
                                 <div
                                   key={di}
-                                  className="relative shrink-0 border-r border-neutral-100 last:border-r-0 bg-neutral-50/40 opacity-0 hover:opacity-100 transition-opacity"
+                                  className="relative shrink-0 border-r border-neutral-100 last:border-r-0 bg-neutral-50/40"
                                   style={{ width: colWidths[di] }}
                                 >
                                   {/* Col resize handle (empty cell) */}
