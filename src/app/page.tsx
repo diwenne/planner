@@ -362,6 +362,47 @@ export default function Home() {
     });
   }, [data]);
 
+  const handleImportData = useCallback((imported: any) => {
+    setData((prev) => {
+      const merged = { ...prev };
+      let hasChanges = false;
+      const changedDates: string[] = [];
+
+      for (const date in imported) {
+        const importedBlocks = imported[date];
+        if (!Array.isArray(importedBlocks)) continue;
+
+        if (!merged[date]) {
+          merged[date] = importedBlocks;
+          hasChanges = true;
+          changedDates.push(date);
+        } else {
+          const currentBlocks = merged[date];
+          const newBlocks = importedBlocks.filter((ib: any) => 
+            !currentBlocks.some((cb) => 
+              cb.id === ib.id || 
+              (cb.type === ib.type && cb.content === ib.content && cb.checked === ib.checked && (ib.content || "").trim() !== "")
+            )
+          );
+          if (newBlocks.length > 0) {
+            merged[date] = [...currentBlocks, ...newBlocks];
+            hasChanges = true;
+            changedDates.push(date);
+          }
+        }
+      }
+
+      if (hasChanges) {
+        saveToLocalStorage(merged);
+        if (isLocalNetwork()) {
+          changedDates.forEach(date => saveToServer(date, merged[date]));
+        }
+      }
+
+      return merged;
+    });
+  }, [saveToLocalStorage, saveToServer]);
+
   const importFromFile = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
@@ -372,8 +413,7 @@ export default function Home() {
       reader.onload = (re: any) => {
         try {
           const imported = JSON.parse(re.target.result);
-          setData(imported);
-          saveToLocalStorage(imported);
+          handleImportData(imported);
           setShowImportModal(false);
         } catch (err) {
           alert("Failed to import: Invalid file");
@@ -382,19 +422,18 @@ export default function Home() {
       reader.readAsText(file);
     };
     input.click();
-  }, [saveToLocalStorage]);
+  }, [handleImportData]);
 
   const importFromText = useCallback(() => {
     try {
       const imported = JSON.parse(importText);
-      setData(imported);
-      saveToLocalStorage(imported);
+      handleImportData(imported);
       setImportText("");
       setShowImportModal(false);
     } catch (err) {
       alert("Failed to import: Invalid data. Make sure you pasted the full text.");
     }
-  }, [importText, saveToLocalStorage]);
+  }, [importText, handleImportData]);
 
 
   // ─── Smooth animation helper ────────────────────────────────────────
