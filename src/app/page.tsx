@@ -210,6 +210,7 @@ export default function Home() {
 
     // First: add all months that have custom positions
     for (const [key, pos] of Object.entries(monthPositions)) {
+      if (key.startsWith("doc-")) continue;
       const [y, m] = key.split("-").map(Number);
       pages.push({ year: y, month: m, x: pos.x, y: pos.y });
       seen.add(key);
@@ -231,6 +232,17 @@ export default function Home() {
 
     return pages;
   }, [focusedYear, focusedMonth, getMonthX, monthPositions]);
+
+  // Documents to render
+  const documentPages = useMemo(() => {
+    const pages: { id: string; x: number; y: number }[] = [];
+    for (const [key, pos] of Object.entries(monthPositions)) {
+      if (key.startsWith("doc-")) {
+        pages.push({ id: key, x: pos.x, y: pos.y });
+      }
+    }
+    return pages;
+  }, [monthPositions]);
 
   // ─── Localhost detection ───────────────────────────────────────────
   const isLocalNetwork = () => {
@@ -853,6 +865,21 @@ export default function Home() {
           <Button variant="outline" size="xs" onClick={() => setShowMonthPicker(true)} className="hidden sm:inline-flex">
             + Month
           </Button>
+          <Button variant="outline" size="xs" onClick={() => {
+            const id = `doc-${Date.now()}`;
+            let centerX = 100;
+            let centerY = 100;
+            if (canvasRef.current) {
+              const rect = canvasRef.current.getBoundingClientRect();
+              centerX = (rect.width / 2 - offsetRef.current.x) / scaleRef.current;
+              centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
+            }
+            const nextPositions = { ...monthPositions, [id]: { x: centerX, y: centerY } };
+            saveMonthPositions(nextPositions);
+            setSelectedMonth(id);
+          }} className="hidden sm:inline-flex">
+            + Document
+          </Button>
           <div className="hidden sm:block w-px h-4 bg-neutral-200" />
           <Button variant="outline" size="xs" onClick={() => setShowExportModal(true)} title="Export data">
             Export
@@ -1195,6 +1222,91 @@ export default function Home() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* ── Document pages ──────────────────────────────────────── */}
+          {documentPages.map((page) => {
+            const isSelected = selectedMonth === page.id;
+            return (
+              <div
+                key={page.id}
+                style={{
+                  position: "absolute",
+                  left: page.x,
+                  top: page.y,
+                  width: 320,
+                }}
+              >
+                <div
+                  className={`flex items-center justify-between px-3 bg-white rounded-t-xl border border-b-0 border-neutral-200 select-none ${
+                    draggingMonth === page.id ? "cursor-grabbing" : "cursor-grab"
+                  }`}
+                  style={{ height: HEADER_HEIGHT }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelectedMonth(page.id);
+                    setDraggingMonth(page.id);
+                    dragMonthStart.current = {
+                      mouseX: e.clientX,
+                      mouseY: e.clientY,
+                      cardX: page.x,
+                      cardY: page.y,
+                    };
+                  }}
+                >
+                  <span className="text-xs font-semibold text-neutral-600">Document</span>
+                  <button
+                    className="text-neutral-400 hover:text-red-500 transition-colors px-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm("Delete this document?")) {
+                        const next = { ...monthPositions };
+                        delete next[page.id];
+                        saveMonthPositions(next);
+                      }
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div
+                  className={`bg-white rounded-b-xl overflow-hidden transition-shadow min-h-[200px] p-4 cursor-text border ${
+                    isSelected
+                      ? "ring-2 ring-blue-500 border-blue-300"
+                      : "border-neutral-200"
+                  }`}
+                  style={{
+                    boxShadow: isSelected
+                      ? "0 4px 12px rgba(59,130,246,0.15)"
+                      : "0 1px 3px rgba(0,0,0,0.03)",
+                  }}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (!target.closest("[contenteditable]") && !target.closest('input[type="checkbox"]')) {
+                      const editables = (e.currentTarget as HTMLElement).querySelectorAll("[contenteditable]");
+                      const last = editables[editables.length - 1] as HTMLElement;
+                      if (last) {
+                        last.focus();
+                        const sel = window.getSelection();
+                        const range = document.createRange();
+                        if (last.childNodes.length > 0) range.setStartAfter(last.lastChild!);
+                        else range.setStart(last, 0);
+                        range.collapse(true);
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                      }
+                    }
+                  }}
+                >
+                  <BlockEditor
+                    blocks={getBlocks(page.id)}
+                    onChange={(blocks) => handleBlocksChange(page.id, blocks)}
+                  />
                 </div>
               </div>
             );
