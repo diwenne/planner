@@ -375,6 +375,8 @@ export default function Home() {
   }, [data]);
 
   const handleImportData = useCallback((imported: any) => {
+    let importedDocs: string[] = [];
+
     setData((prev) => {
       const merged = { ...prev };
       let hasChanges = false;
@@ -383,6 +385,10 @@ export default function Home() {
       for (const date in imported) {
         const importedBlocks = imported[date];
         if (!Array.isArray(importedBlocks)) continue;
+
+        if (date.startsWith("doc-")) {
+          importedDocs.push(date);
+        }
 
         if (!merged[date]) {
           merged[date] = importedBlocks;
@@ -413,6 +419,34 @@ export default function Home() {
 
       return merged;
     });
+
+    if (importedDocs.length > 0) {
+      setMonthPositions(prev => {
+        let hasNew = false;
+        const next = { ...prev };
+        let offsetX = 0;
+        let centerX = 100;
+        let centerY = 100;
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          centerX = (rect.width / 2 - offsetRef.current.x) / scaleRef.current;
+          centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
+        }
+
+        for (const docId of importedDocs) {
+          if (!next[docId]) {
+            hasNew = true;
+            next[docId] = { x: centerX + offsetX, y: centerY };
+            offsetX += 340;
+          }
+        }
+        if (hasNew) {
+          localStorage.setItem("planner-month-positions", JSON.stringify(next));
+          return next;
+        }
+        return prev;
+      });
+    }
   }, [saveToLocalStorage, saveToServer]);
 
   const importFromFile = useCallback(() => {
@@ -874,6 +908,21 @@ export default function Home() {
               centerX = (rect.width / 2 - offsetRef.current.x) / scaleRef.current;
               centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
             }
+
+            // Prevent placing it at the exact same place as another object
+            let isOverlapping = true;
+            while (isOverlapping) {
+              isOverlapping = false;
+              for (const pos of Object.values(monthPositions)) {
+                if (Math.abs(pos.x - centerX) < 20 && Math.abs(pos.y - centerY) < 20) {
+                  isOverlapping = true;
+                  centerX += 40;
+                  centerY += 40;
+                  break;
+                }
+              }
+            }
+
             const nextPositions = { ...monthPositions, [id]: { x: centerX, y: centerY } };
             saveMonthPositions(nextPositions);
             setSelectedMonth(id);
@@ -1244,7 +1293,7 @@ export default function Home() {
                   className={`flex items-center justify-between px-3 bg-white rounded-t-xl border border-b-0 border-neutral-200 select-none ${
                     draggingMonth === page.id ? "cursor-grabbing" : "cursor-grab"
                   }`}
-                  style={{ height: HEADER_HEIGHT }}
+                  style={{ height: TITLE_HEIGHT }}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1258,7 +1307,7 @@ export default function Home() {
                     };
                   }}
                 >
-                  <span className="text-xs font-semibold text-neutral-600">Document</span>
+                  <span className="text-sm font-semibold text-neutral-600 pointer-events-none">Document</span>
                   <button
                     className="text-neutral-400 hover:text-red-500 transition-colors px-1"
                     onClick={(e) => {
