@@ -151,7 +151,7 @@ export default function Home() {
 
   // ─── Month card positions & selection ─────────────────────────────
 
-  const [monthPositions, setMonthPositions] = useState<Record<string, { x: number; y: number }>>({}); 
+  const [monthPositions, setMonthPositions] = useState<Record<string, { x: number; y: number; name?: string }>>({}); 
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [draggingMonth, setDraggingMonth] = useState<string | null>(null);
   const dragMonthStart = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0 });
@@ -169,7 +169,7 @@ export default function Home() {
   }, []);
 
   // Save month positions
-  const saveMonthPositions = useCallback((positions: Record<string, { x: number; y: number }>) => {
+  const saveMonthPositions = useCallback((positions: Record<string, { x: number; y: number; name?: string }>) => {
     setMonthPositions(positions);
     localStorage.setItem("planner-month-positions", JSON.stringify(positions));
   }, []);
@@ -235,10 +235,10 @@ export default function Home() {
 
   // Documents to render
   const documentPages = useMemo(() => {
-    const pages: { id: string; x: number; y: number }[] = [];
+    const pages: { id: string; x: number; y: number; name?: string }[] = [];
     for (const [key, pos] of Object.entries(monthPositions)) {
       if (key.startsWith("doc-")) {
-        pages.push({ id: key, x: pos.x, y: pos.y });
+        pages.push({ id: key, x: pos.x, y: pos.y, name: pos.name });
       }
     }
     return pages;
@@ -1308,16 +1308,41 @@ export default function Home() {
                       cardY: page.y,
                     };
                   }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    const newName = prompt("Rename document:", page.name || "Document");
+                    if (newName !== null) {
+                      saveMonthPositions({
+                        ...monthPositions,
+                        [page.id]: { ...monthPositions[page.id], name: newName.trim() }
+                      });
+                    }
+                  }}
                 >
-                  <span className="text-sm font-semibold text-neutral-600 pointer-events-none">Document</span>
+                  <span className="text-sm font-semibold text-neutral-600 pointer-events-none">
+                    {page.name || "Document"}
+                  </span>
                   <button
                     className="text-neutral-400 hover:text-red-500 transition-colors p-2 -mr-2"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      
+                      const blocks = data[page.id];
+                      const isEmpty = !blocks || blocks.length === 0 || (blocks.length === 1 && !blocks[0].content);
+                      
+                      if (!isEmpty) {
+                        if (!confirm("This document has content. Are you sure you want to delete it?")) return;
+                      }
+
                       const next = { ...monthPositions };
                       delete next[page.id];
                       saveMonthPositions(next);
+                      
+                      const nextData = { ...data };
+                      delete nextData[page.id];
+                      setData(nextData);
+                      saveToLocalStorage(nextData);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                     onTouchStart={(e) => e.stopPropagation()}
