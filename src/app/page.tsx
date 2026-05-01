@@ -1005,6 +1005,7 @@ export default function Home() {
                   left: page.x,
                   top: page.y,
                   width: pageWidth,
+                  zIndex: isSelected ? 30 : 10,
                 }}
               >
                 {/* Month title / drag handle */}
@@ -1287,6 +1288,7 @@ export default function Home() {
                   left: page.x,
                   top: page.y,
                   width: 320,
+                  zIndex: isSelected ? 30 : 20,
                 }}
               >
                 <div
@@ -1309,16 +1311,16 @@ export default function Home() {
                 >
                   <span className="text-sm font-semibold text-neutral-600 pointer-events-none">Document</span>
                   <button
-                    className="text-neutral-400 hover:text-red-500 transition-colors px-1"
+                    className="text-neutral-400 hover:text-red-500 transition-colors p-2 -mr-2"
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
-                      if (confirm("Delete this document?")) {
-                        const next = { ...monthPositions };
-                        delete next[page.id];
-                        saveMonthPositions(next);
-                      }
+                      const next = { ...monthPositions };
+                      delete next[page.id];
+                      saveMonthPositions(next);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                   >
                     ×
                   </button>
