@@ -2,7 +2,7 @@
 
 A minimal calendar planner that runs in your browser. No account needed. Your data saves automatically.
 
-**Live version (no setup):** [plannerrrrr.vercel.app](https://plannerrrrr.vercel.app)
+**Live version (no setup):** [tryplanner.vercel.app](https://plannerrrrr.vercel.app)
 
 ---
 
