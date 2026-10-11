@@ -38,16 +38,14 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
+// Block content is stored as the editor's own innerHTML, so it is already entity-escaped
+// (a typed "&" is saved as "&amp;") and must not be escaped again. Only the inline tags the
+// editor itself produces are kept; any other markup (e.g. from imported data) is dropped.
+const ALLOWED_TAG = /^(<\/?(sup|sub)>|<br\s*\/?>)$/i;
+
 function getSafeHTML(content: string): string {
   if (!content) return "";
-  if (
-    content.includes("<sup>") ||
-    content.includes("<sub>") ||
-    content.includes("<br>")
-  ) {
-    return content;
-  }
-  return escapeHtml(content);
+  return content.replace(/<[^>]*>?/g, (tag) => (ALLOWED_TAG.test(tag) ? tag : ""));
 }
 
 function cleanEmptyTags(html: string): string {
@@ -277,7 +275,8 @@ export default function BlockEditor({ blocks, onChange }: BlockEditorProps) {
           newBlocks.push({
             id: generateId(),
             type,
-            content: content.trim(),
+            // Pasted text is plain; content is stored as HTML
+            content: escapeHtml(content.trim()),
             ...(type === "todo" ? { checked } : {}),
           });
         });

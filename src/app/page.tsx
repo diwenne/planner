@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Block, PlannerData } from "@/lib/types";
 import BlockEditor from "@/components/block-editor";
+import MeasuredCard from "@/components/measured-card";
 import { Button } from "@/components/ui/button";
+import { LayoutItem, organizeLayout, resolveLayout } from "@/lib/layout";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -69,6 +71,9 @@ const HEADER_HEIGHT = 36;
 const TITLE_HEIGHT = 44;
 const PAGE_GAP = 80;
 const RENDER_RANGE = 2; // Render focused ± 2 months = 5 pages
+
+// Canvas position of each card, keyed by "year-month" or "doc-<id>" (docs also carry a name)
+type Positions = Record<string, { x: number; y: number; name?: string }>;
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -158,35 +163,76 @@ export default function Home() {
 
   // ─── Month card positions & selection ─────────────────────────────
 
-  const [monthPositions, setMonthPositions] = useState<Record<string, { x: number; y: number; name?: string }>>({}); 
+  const [monthPositions, setMonthPositions] = useState<Positions>({});
+  // Always holds the latest positions, so handlers never read a stale render's value
+  const monthPositionsRef = useRef<Positions>({});
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [draggingMonth, setDraggingMonth] = useState<string | null>(null);
   const dragMonthStart = useRef({ mouseX: 0, mouseY: 0, cardX: 0, cardY: 0 });
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
 
+  // Rendered size of every card on the canvas, used to detect overlaps
+  const [cardSizes, setCardSizes] = useState<Record<string, { w: number; h: number }>>({});
+  // Cards that were just dropped or created. If one lands on another card, it is the one that moves.
+  const yieldingCards = useRef<Set<string>>(new Set());
+  const positionsSaveTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Layout from before the last "Organize", kept briefly so it can be undone
+  const [undoLayout, setUndoLayout] = useState<Positions | null>(null);
+  const undoTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const reportCardSize = useCallback(
+    (id: string, size: { w: number; h: number } | null) => {
+      setCardSizes((prev) => {
+        const cur = prev[id];
+        if (!size) {
+          if (!cur) return prev;
+          const rest = { ...prev };
+          delete rest[id];
+          return rest;
+        }
+        if (cur && cur.w === size.w && cur.h === size.h) return prev;
+        return { ...prev, [id]: size };
+      });
+    },
+    []
+  );
+
+  // Update positions on screen only
+  const commitPositions = useCallback((positions: Positions) => {
+    monthPositionsRef.current = positions;
+    setMonthPositions(positions);
+  }, []);
+
   // Load month positions from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("planner-month-positions");
     if (saved) {
       try {
-        setMonthPositions(JSON.parse(saved));
+        commitPositions(JSON.parse(saved));
       } catch { /* ignore */ }
     }
-  }, []);
+  }, [commitPositions]);
 
-  // Save month positions
-  const saveMonthPositions = useCallback((positions: Record<string, { x: number; y: number; name?: string }>) => {
-    setMonthPositions(positions);
+  // Update positions on screen and persist them (localStorage + server)
+  const saveMonthPositions = useCallback((positions: Positions) => {
+    commitPositions(positions);
     localStorage.setItem("planner-month-positions", JSON.stringify(positions));
     if (isLocalNetwork()) {
-      fetch("/api/planner", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: "__monthPositions", positions }),
-      });
+      // Debounced, and always sends the latest, so rapid saves can't land out of order
+      if (positionsSaveTimeout.current) clearTimeout(positionsSaveTimeout.current);
+      positionsSaveTimeout.current = setTimeout(() => {
+        fetch("/api/planner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: "__monthPositions",
+            positions: monthPositionsRef.current,
+          }),
+        });
+      }, 200);
     }
-  }, []);
+  }, [commitPositions]);
 
   // ─── Sync refs ────────────────────────────────────────────────────────
 
@@ -217,6 +263,32 @@ export default function Home() {
     [anchorGlobal, PAGE_STRIDE]
   );
 
+  // Where a month without a saved position goes: continuing the row from the nearest month
+  // that has one. (A grid anchored on today's month would slide over the cards you arranged
+  // every time the calendar month changes.)
+  const getMonthPos = useCallback(
+    (year: number, month: number, positions: Positions) => {
+      const saved = positions[`${year}-${month}`];
+      if (saved) return { x: saved.x, y: saved.y };
+
+      const idx = monthToGlobalIndex(year, month);
+      let nearest: { idx: number; x: number; y: number } | null = null;
+      for (const [key, pos] of Object.entries(positions)) {
+        if (key.startsWith("doc-")) continue;
+        const [y, m] = key.split("-").map(Number);
+        const pIdx = monthToGlobalIndex(y, m);
+        const dist = Math.abs(pIdx - idx);
+        const nearestDist = nearest ? Math.abs(nearest.idx - idx) : Infinity;
+        if (dist < nearestDist || (dist === nearestDist && pIdx < nearest!.idx)) {
+          nearest = { idx: pIdx, x: pos.x, y: pos.y };
+        }
+      }
+      if (!nearest) return { x: getMonthX(year, month), y: 0 };
+      return { x: nearest.x + (idx - nearest.idx) * PAGE_STRIDE, y: nearest.y };
+    },
+    [getMonthX, PAGE_STRIDE]
+  );
+
   // Months to render: use stored positions, fallback to computed
   const monthPages = useMemo(() => {
     const pages: { year: number; month: number; x: number; y: number }[] = [];
@@ -238,14 +310,13 @@ export default function Home() {
         pages.push({
           year: d.getFullYear(),
           month: d.getMonth(),
-          x: getMonthX(d.getFullYear(), d.getMonth()),
-          y: 0,
+          ...getMonthPos(d.getFullYear(), d.getMonth(), monthPositions),
         });
       }
     }
 
     return pages;
-  }, [focusedYear, focusedMonth, getMonthX, monthPositions]);
+  }, [focusedYear, focusedMonth, getMonthPos, monthPositions]);
 
   // Documents to render
   const documentPages = useMemo(() => {
@@ -286,7 +357,7 @@ export default function Home() {
           localStorage.setItem("planner-data", JSON.stringify(plannerData));
           
           if (__monthPositions) {
-            setMonthPositions(__monthPositions);
+            commitPositions(__monthPositions);
             localStorage.setItem("planner-month-positions", JSON.stringify(__monthPositions));
           }
           setLoaded(true);
@@ -295,7 +366,7 @@ export default function Home() {
     } else {
       setLoaded(true);
     }
-  }, []);
+  }, [commitPositions]);
 
   // ─── Center on mount ────────────────────────────────────────────────
 
@@ -306,9 +377,11 @@ export default function Home() {
       const weeks = getMonthWeeks(focusedYear, focusedMonth);
       const calH =
         TITLE_HEIGHT + HEADER_HEIGHT + weeks.length * DEFAULT_ROW_HEIGHT;
+      // Start on the focused month wherever it actually sits on the canvas
+      const target = getMonthPos(focusedYear, focusedMonth, monthPositionsRef.current);
       setOffset({
-        x: Math.max(60, (clientWidth - pageWidth) / 2),
-        y: Math.max(40, (clientHeight - calH) / 2),
+        x: Math.max(60, (clientWidth - pageWidth) / 2) - target.x * scale,
+        y: Math.max(40, (clientHeight - calH) / 2) - target.y * scale,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,33 +506,28 @@ export default function Home() {
     });
 
     if (importedDocs.length > 0) {
-      setMonthPositions(prev => {
-        let hasNew = false;
-        const next = { ...prev };
-        let offsetX = 0;
-        let centerX = 100;
-        let centerY = 100;
-        if (canvasRef.current) {
-          const rect = canvasRef.current.getBoundingClientRect();
-          centerX = (rect.width / 2 - offsetRef.current.x) / scaleRef.current;
-          centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
-        }
+      let hasNew = false;
+      const next = { ...monthPositionsRef.current };
+      let offsetX = 0;
+      let centerX = 100;
+      let centerY = 100;
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        centerX = (rect.width / 2 - offsetRef.current.x) / scaleRef.current;
+        centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
+      }
 
-        for (const docId of importedDocs) {
-          if (!next[docId]) {
-            hasNew = true;
-            next[docId] = { x: centerX + offsetX, y: centerY };
-            offsetX += 340;
-          }
+      for (const docId of importedDocs) {
+        if (!next[docId]) {
+          hasNew = true;
+          next[docId] = { x: centerX + offsetX, y: centerY };
+          yieldingCards.current.add(docId);
+          offsetX += 340;
         }
-        if (hasNew) {
-          localStorage.setItem("planner-month-positions", JSON.stringify(next));
-          return next;
-        }
-        return prev;
-      });
+      }
+      if (hasNew) saveMonthPositions(next);
     }
-  }, [saveToLocalStorage, saveToServer]);
+  }, [saveToLocalStorage, saveToServer, saveMonthPositions]);
 
   const importFromFile = useCallback(() => {
     const input = document.createElement("input");
@@ -559,7 +627,8 @@ export default function Home() {
 
       if (canvasRef.current) {
         const { clientWidth, clientHeight } = canvasRef.current;
-        const targetX = getMonthX(y, m);
+        // The month's actual spot on the canvas (it may have been dragged elsewhere)
+        const target = getMonthPos(y, m, monthPositionsRef.current);
         const weeks = getMonthWeeks(y, m);
         const calH =
           TITLE_HEIGHT + HEADER_HEIGHT + weeks.length * DEFAULT_ROW_HEIGHT;
@@ -567,15 +636,15 @@ export default function Home() {
 
         // transform is translate(ox, oy) scale(s)
         // screen pos = offset + canvasPos * scale
-        // center: offset + (targetX + pageWidth/2) * s = clientWidth/2
-        //   =>  offset = (clientWidth - pageWidth * s) / 2 - targetX * s
+        // center: offset + (target.x + pageWidth/2) * s = clientWidth/2
+        //   =>  offset = (clientWidth - pageWidth * s) / 2 - target.x * s
         animateToOffset(
-          (clientWidth - pageWidth * s) / 2 - targetX * s,
-          Math.max(40, (clientHeight - calH * s) / 2)
+          (clientWidth - pageWidth * s) / 2 - target.x * s,
+          Math.max(40, (clientHeight - calH * s) / 2) - target.y * s
         );
       }
     },
-    [getMonthX, pageWidth, animateToOffset]
+    [getMonthPos, pageWidth, animateToOffset]
   );
 
   const prevMonth = () =>
@@ -586,6 +655,50 @@ export default function Home() {
     navigateToMonth(today.getFullYear(), today.getMonth());
   const centerCalendar = () =>
     navigateToMonth(focusedYearRef.current, focusedMonthRef.current);
+
+  // Months in one row by date, notes in a grid above the focused month
+  const organize = () => {
+    const previous = monthPositionsRef.current;
+    const anchorId = `${focusedYearRef.current}-${focusedMonthRef.current}`;
+    const organized = organizeLayout({
+      months: monthPages.map((p) => ({
+        id: `${p.year}-${p.month}`,
+        idx: monthToGlobalIndex(p.year, p.month),
+      })),
+      notes: documentPages.map((p) => ({
+        id: p.id,
+        order: Number(p.id.slice("doc-".length)) || 0,
+        w: cardSizes[p.id]?.w ?? 320,
+        h: cardSizes[p.id]?.h ?? 244,
+      })),
+      monthWidth: pageWidth,
+      anchorMonthId: anchorId,
+    });
+
+    const next = { ...previous };
+    for (const [id, pos] of Object.entries(organized)) next[id] = { ...next[id], ...pos };
+    saveMonthPositions(next);
+
+    if (undoTimeout.current) clearTimeout(undoTimeout.current);
+    setUndoLayout(previous);
+    undoTimeout.current = setTimeout(() => setUndoLayout(null), 10000);
+
+    // Show the result: the focused month with the notes grid above it
+    const canvas = canvasRef.current;
+    const month = organized[anchorId];
+    if (canvas && month) {
+      const s = scaleRef.current;
+      const top = Math.min(month.y, ...documentPages.map((p) => organized[p.id].y));
+      animateToOffset((canvas.clientWidth - pageWidth * s) / 2 - month.x * s, 40 - top * s);
+    }
+  };
+
+  const undoOrganize = () => {
+    if (!undoLayout) return;
+    saveMonthPositions(undoLayout);
+    if (undoTimeout.current) clearTimeout(undoTimeout.current);
+    setUndoLayout(null);
+  };
 
   // ─── Canvas wheel handler (pan + pinch-zoom) ─────────────────────────
 
@@ -766,25 +879,30 @@ export default function Home() {
   useEffect(() => {
     if (!draggingMonth) return;
 
+    let moved = false;
+
     const handleMouseMove = (e: globalThis.MouseEvent) => {
+      moved = true;
       const s = scaleRef.current;
       const dx = (e.clientX - dragMonthStart.current.mouseX) / s;
       const dy = (e.clientY - dragMonthStart.current.mouseY) / s;
-      setMonthPositions((prev) => ({
+      const prev = monthPositionsRef.current;
+      commitPositions({
         ...prev,
         [draggingMonth]: {
           ...prev[draggingMonth],
           x: dragMonthStart.current.cardX + dx,
           y: dragMonthStart.current.cardY + dy,
         },
-      }));
+      });
     };
 
     const handleMouseUp = () => {
-      setMonthPositions((prev) => {
-        localStorage.setItem("planner-month-positions", JSON.stringify(prev));
-        return prev;
-      });
+      if (moved) {
+        // If it was dropped on another card, the overlap pass moves this one aside
+        yieldingCards.current.add(draggingMonth);
+        saveMonthPositions(monthPositionsRef.current);
+      }
       setDraggingMonth(null);
     };
 
@@ -794,7 +912,65 @@ export default function Home() {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [draggingMonth, monthPositions, saveMonthPositions]);
+  }, [draggingMonth, commitPositions, saveMonthPositions]);
+
+  // ─── Keep cards from overlapping ──────────────────────────────────────
+  // Runs whenever a card moves, is added, or changes size (e.g. text typed into a day cell
+  // grows its month). Pushed cards are saved like any other move, so the fix survives reloads.
+
+  useEffect(() => {
+    if (!loaded || draggingMonth || resizing) return;
+
+    const cards = [
+      ...monthPages.map((p) => ({ id: `${p.year}-${p.month}`, x: p.x, y: p.y })),
+      ...documentPages.map((p) => ({ id: p.id, x: p.x, y: p.y })),
+    ];
+    const items: LayoutItem[] = [];
+    for (const card of cards) {
+      const size = cardSizes[card.id];
+      if (!size) return; // not measured yet; runs again once it is
+      items.push({ ...card, ...size });
+    }
+
+    // Priority: cards the user placed stay put, then auto-placed months, then whatever was just
+    // dropped or created.
+    const yielding = yieldingCards.current;
+    const rank = (id: string) => (yielding.has(id) ? 2 : monthPositions[id] ? 0 : 1);
+    items.sort(
+      (a, b) =>
+        rank(a.id) - rank(b.id) ||
+        a.y - b.y ||
+        a.x - b.x ||
+        (a.id < b.id ? -1 : 1)
+    );
+
+    const resolve = () => {
+      yielding.clear();
+      const moved = resolveLayout(items);
+      if (Object.keys(moved).length === 0) return;
+      const next = { ...monthPositionsRef.current };
+      for (const [id, pos] of Object.entries(moved)) next[id] = { ...next[id], ...pos };
+      saveMonthPositions(next);
+    };
+
+    // Drops and new cards resolve right away. Size changes wait a moment so a burst of
+    // typing or the initial render settling doesn't shuffle cards around.
+    if (yielding.size > 0) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, 200);
+    return () => clearTimeout(timer);
+  }, [
+    loaded,
+    draggingMonth,
+    resizing,
+    monthPages,
+    documentPages,
+    monthPositions,
+    cardSizes,
+    saveMonthPositions,
+  ]);
 
   // ─── Resize handlers (col + row) ─────────────────────────────────────
 
@@ -956,25 +1132,22 @@ export default function Home() {
               centerY = (rect.height / 2 - offsetRef.current.y) / scaleRef.current;
             }
 
-            // Prevent placing it at the exact same place as another object
-            let isOverlapping = true;
-            while (isOverlapping) {
-              isOverlapping = false;
-              for (const pos of Object.values(monthPositions)) {
-                if (Math.abs(pos.x - centerX) < 20 && Math.abs(pos.y - centerY) < 20) {
-                  isOverlapping = true;
-                  centerX += 40;
-                  centerY += 40;
-                  break;
-                }
-              }
-            }
-
-            const nextPositions = { ...monthPositions, [id]: { x: centerX, y: centerY } };
+            // If this lands on another card, the overlap pass moves the new document aside
+            yieldingCards.current.add(id);
+            const nextPositions = { ...monthPositionsRef.current, [id]: { x: centerX, y: centerY } };
             saveMonthPositions(nextPositions);
             setSelectedMonth(id);
           }} className="hidden sm:inline-flex">
             + Document
+          </Button>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={organize}
+            title="Tidy up: months in a row, notes in a grid above"
+            className="hidden sm:inline-flex"
+          >
+            Organize
           </Button>
           <div className="hidden sm:block w-px h-4 bg-neutral-200" />
           <Button variant="outline" size="xs" onClick={() => setShowExportModal(true)} title="Export data">
@@ -1046,8 +1219,10 @@ export default function Home() {
             const isSelected = selectedMonth === monthKey;
 
             return (
-              <div
+              <MeasuredCard
                 key={monthKey}
+                id={monthKey}
+                onSize={reportCardSize}
                 style={{
                   position: "absolute",
                   left: page.x,
@@ -1321,7 +1496,7 @@ export default function Home() {
                     );
                   })}
                 </div>
-              </div>
+              </MeasuredCard>
             );
           })}
 
@@ -1329,8 +1504,10 @@ export default function Home() {
           {documentPages.map((page) => {
             const isSelected = selectedMonth === page.id;
             return (
-              <div
+              <MeasuredCard
                 key={page.id}
+                id={page.id}
+                onSize={reportCardSize}
                 style={{
                   position: "absolute",
                   left: page.x,
@@ -1360,9 +1537,10 @@ export default function Home() {
                     e.stopPropagation();
                     const newName = prompt("Rename document:", page.name || "Document");
                     if (newName !== null) {
+                      const positions = monthPositionsRef.current;
                       saveMonthPositions({
-                        ...monthPositions,
-                        [page.id]: { ...monthPositions[page.id], name: newName.trim() }
+                        ...positions,
+                        [page.id]: { ...positions[page.id], name: newName.trim() }
                       });
                     }
                   }}
@@ -1383,7 +1561,7 @@ export default function Home() {
                         if (!confirm("This document has content. Are you sure you want to delete it?")) return;
                       }
 
-                      const next = { ...monthPositions };
+                      const next = { ...monthPositionsRef.current };
                       delete next[page.id];
                       saveMonthPositions(next);
                       
@@ -1432,11 +1610,24 @@ export default function Home() {
                     onChange={(blocks) => handleBlocksChange(page.id, blocks)}
                   />
                 </div>
-              </div>
+              </MeasuredCard>
             );
           })}
         </div>
       </div>
+
+      {/* ── Undo organize ─────────────────────────────────────────── */}
+      {undoLayout && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-full bg-neutral-900 text-white text-xs pl-4 pr-1.5 py-1.5 shadow-lg">
+          <span>Layout organized</span>
+          <button
+            onClick={undoOrganize}
+            className="rounded-full px-2.5 py-1 font-medium hover:bg-white/15 transition-colors"
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       {/* ── Export Modal ──────────────────────────────────────────── */}
       {showExportModal && (
@@ -1548,9 +1739,10 @@ export default function Home() {
                       const cy = canvas ? (canvas.clientHeight / 2 - oy) / s : 0;
 
                       const newPositions = {
-                        ...monthPositions,
+                        ...monthPositionsRef.current,
                         [key]: { x: cx - pageWidth / 2, y: cy - 200 },
                       };
+                      yieldingCards.current.add(key);
                       saveMonthPositions(newPositions);
                       setShowMonthPicker(false);
                       navigateToMonth(pickerYear, mi);
